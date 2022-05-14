@@ -1,9 +1,14 @@
 package cn.zcn.distributed.lock;
 
+import cn.zcn.distributed.lock.subscription.LockSubscription;
+import cn.zcn.distributed.lock.subscription.LockSubscriptionEntry;
 import io.netty.util.Timeout;
 import io.netty.util.Timer;
 
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * 分布式锁的结构
@@ -15,9 +20,11 @@ public abstract class BaseZLock implements ZLock {
 
     private final static String LOCK_PREFIX = "-lock-";
 
-    protected final String lock;
+    protected final String lockName;
     protected final String instanceId;
+    
     private final Timer renewTimer;
+    private final LockSubscription lockSubscription;
     private Timeout renewTimeout;
 
     /**
@@ -25,10 +32,11 @@ public abstract class BaseZLock implements ZLock {
      * @param instanceId UUID
      * @param renewTimer 锁续期定时器
      */
-    public BaseZLock(String lock, String instanceId, Timer renewTimer) {
-        this.lock = LOCK_PREFIX + lock;
+    public BaseZLock(String lock, String instanceId, Timer renewTimer, LockSubscription lockSubscription) {
+        this.lockName = LOCK_PREFIX + lock;
         this.instanceId = instanceId;
         this.renewTimer = renewTimer;
+        this.lockSubscription = lockSubscription;
     }
 
     @Override
@@ -43,7 +51,15 @@ public abstract class BaseZLock implements ZLock {
         }
 
         //获取锁失败，订阅锁的状态
-        SubscribeLatch subLatch = subscribe(getLockEntry());
+        CompletableFuture<LockSubscriptionEntry> subscriptionFuture = lockSubscription.subscribe(lockName);
+        LockSubscriptionEntry lockSubscriptionEntry;
+
+        try {
+            lockSubscriptionEntry = subscriptionFuture.get();
+        } catch (ExecutionException e) {
+            //TODO
+            throw new RuntimeException(e);
+        }
 
         try {
             while (true) {
@@ -56,14 +72,14 @@ public abstract class BaseZLock implements ZLock {
 
                 if (ttl >= 0) {
                     //锁已被其他线程锁定，需等待 ttl 毫秒
-                    subLatch.tryAcquire(ttl, TimeUnit.MILLISECONDS);
+                    lockSubscriptionEntry.getLatch().tryAcquire(ttl, TimeUnit.MILLISECONDS);
                 } else {
                     // 获取锁失败，但锁已过期
-                    subLatch.acquire();
+                    lockSubscriptionEntry.getLatch().acquire();
                 }
             }
         } finally {
-            unSubscribe(getLockEntry());
+            lockSubscription.unsubscribe(lockSubscriptionEntry, lockName);
         }
     }
 
@@ -80,15 +96,28 @@ public abstract class BaseZLock implements ZLock {
             return true;
         }
 
-        if (System.currentTimeMillis() - startMillis >= waitTimeMillis) {
+        waitTimeMillis -= System.currentTimeMillis() - startMillis;
+        if (waitTimeMillis <= 0) {
             return false;
         }
 
-        SubscribeLatch subLatch = subscribe(getLockEntry());
+        //获取锁失败，订阅锁的状态
+        CompletableFuture<LockSubscriptionEntry> subscriptionFuture = lockSubscription.subscribe(lockName);
+        LockSubscriptionEntry lockSubscriptionEntry;
+
+        //TODO 处理异常
+        try {
+            lockSubscriptionEntry = subscriptionFuture.get(waitTimeMillis, TimeUnit.MILLISECONDS);
+        } catch (ExecutionException e) {
+            throw new RuntimeException(e);
+        } catch (TimeoutException e) {
+            throw new RuntimeException(e);
+        }
 
         try {
             while (true) {
-                if (System.currentTimeMillis() - startMillis >= waitTimeMillis) {
+                waitTimeMillis -= System.currentTimeMillis() - startMillis;
+                if (waitTimeMillis <= 0) {
                     return false;
                 }
 
@@ -99,15 +128,19 @@ public abstract class BaseZLock implements ZLock {
                     return true;
                 }
 
-                if (ttl >= 0) {
-                    subLatch.tryAcquire(System.currentTimeMillis() - startMillis, TimeUnit.MILLISECONDS);
+                waitTimeMillis -= System.currentTimeMillis() - startMillis;
+                if (waitTimeMillis <= 0) {
+                    return false;
+                }
+
+                if (ttl >= 0 && ttl < waitTimeMillis) {
+                    lockSubscriptionEntry.getLatch().tryAcquire(ttl, TimeUnit.MILLISECONDS);
                 } else {
-                    // 获取锁失败，但锁已过期
-                    subLatch.acquire();
+                    lockSubscriptionEntry.getLatch().tryAcquire(waitTimeMillis, TimeUnit.MILLISECONDS);
                 }
             }
         } finally {
-            unSubscribe(getLockEntry());
+            lockSubscription.unsubscribe(lockSubscriptionEntry, lockName);
         }
     }
 
@@ -152,8 +185,12 @@ public abstract class BaseZLock implements ZLock {
     /**
      * e.g. 5b978978-ed05-4715-b9b0-bc0217278329:78
      */
-    public String getLockEntry() {
+    protected String getLockEntry() {
         return instanceId + ":" + Thread.currentThread().getId();
+    }
+
+    protected String getLockName() {
+        return lockName;
     }
 
     /**
@@ -161,16 +198,6 @@ public abstract class BaseZLock implements ZLock {
      */
     @Override
     public abstract boolean isHeldByCurrentThread();
-
-    /**
-     * 当锁被其他线程占用时，订阅锁的状态
-     */
-    protected abstract SubscribeLatch subscribe(String entry);
-
-    /**
-     * 取消锁的订阅
-     */
-    protected abstract void unSubscribe(String entry);
 
     /**
      * 申请锁，并返回锁的持续时间
