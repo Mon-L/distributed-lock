@@ -3,7 +3,7 @@ package cn.zcn.distributed.lock.subscription;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Semaphore;
 
-public class LockSubscriptionEntry implements SubscriptionListener {
+public class LockSubscriptionEntry {
 
     /**
      * 锁的订阅数量
@@ -41,11 +41,6 @@ public class LockSubscriptionEntry implements SubscriptionListener {
 
     public Semaphore getUnLockLatch() {
         return unLockSemaphore;
-    }
-
-    @Override
-    public void onMessage(String channel, Object message) {
-
     }
 
     @Override
