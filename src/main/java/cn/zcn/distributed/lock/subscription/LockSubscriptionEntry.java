@@ -5,8 +5,6 @@ import java.util.concurrent.Semaphore;
 
 public class LockSubscriptionEntry implements SubscriptionListener {
 
-    public static final Long UNLOCK_MESSAGE = 0L;
-
     /**
      * 锁的订阅数量
      */
@@ -47,13 +45,7 @@ public class LockSubscriptionEntry implements SubscriptionListener {
 
     @Override
     public void onMessage(String channel, Object message) {
-        if (!name.equals(channel)) {
-            return;
-        }
 
-        if (message.equals(UNLOCK_MESSAGE)) {
-            unLockSemaphore.release();
-        }
     }
 
     @Override

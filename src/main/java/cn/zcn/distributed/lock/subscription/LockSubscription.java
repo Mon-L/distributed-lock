@@ -6,6 +6,8 @@ import java.util.concurrent.ConcurrentMap;
 
 public class LockSubscription {
 
+    public static final Long UNLOCK_MESSAGE = 0L;
+
     private final LockSubscriptionService subscriptionService;
     private final ConcurrentMap<String, LockSubscriptionEntry> entries = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, AsyncRunnableQueen> queens = new ConcurrentHashMap<>();
@@ -39,12 +41,20 @@ public class LockSubscription {
                 return;
             }
 
-            CompletableFuture<?> subFuture = subscriptionService.subscribe(channel, entry);
-            subFuture.whenComplete((r, t) -> {
+            SubscriptionListener listener = createListener(channel, entry);
+            CompletableFuture<?> subscriptionPromise = subscriptionService.subscribe(channel, listener, newPromise);
+
+            newPromise.whenComplete((r, e) -> {
+                if (e != null) {
+                    subscriptionPromise.completeExceptionally(e);
+                }
+            });
+
+            subscriptionPromise.whenComplete((r, t) -> {
                 if (t == null) {
-                    newPromise.complete(entry);
+                    entry.getResult().complete(entry);
                 } else {
-                    newPromise.completeExceptionally(t);
+                    entry.getResult().completeExceptionally(t);
                 }
             });
         });
@@ -65,5 +75,17 @@ public class LockSubscription {
                 queen.runNext();
             }
         });
+    }
+
+    private SubscriptionListener createListener(String channelName, LockSubscriptionEntry lockSubscriptionEntry) {
+        return (channel, message) -> {
+            if (!channelName.equals(channel)) {
+                return;
+            }
+
+            if (message.equals(UNLOCK_MESSAGE)) {
+                lockSubscriptionEntry.getUnLockLatch().release();
+            }
+        };
     }
 }

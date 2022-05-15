@@ -27,7 +27,7 @@ public class LockSubscriptionTest {
     @Test
     public void testSubscribeWhenSerial() throws ExecutionException, InterruptedException, TimeoutException {
         CompletableFuture<Void> subscriptionFuture = new CompletableFuture<>();
-        Mockito.when(subscriptionService.subscribe(Mockito.any(), Mockito.any())).thenReturn(subscriptionFuture);
+        Mockito.when(subscriptionService.subscribe(Mockito.any(), Mockito.any(), Mockito.any())).thenReturn(subscriptionFuture);
         new Thread(() -> {
             try {
                 Thread.sleep(200);
@@ -42,9 +42,9 @@ public class LockSubscriptionTest {
     }
 
     @Test
-    public void testSubscribeWhenConcurrent() throws ExecutionException, InterruptedException, TimeoutException {
+    public void testSubscribeWhenConcurrent() throws InterruptedException {
         CompletableFuture<Void> subscriptionFuture = new CompletableFuture<>();
-        Mockito.when(subscriptionService.subscribe(Mockito.any(), Mockito.any())).thenReturn(subscriptionFuture);
+        Mockito.when(subscriptionService.subscribe(Mockito.any(), Mockito.any(), Mockito.any())).thenReturn(subscriptionFuture);
         new Thread(() -> {
             try {
                 Thread.sleep(2000);
@@ -77,9 +77,9 @@ public class LockSubscriptionTest {
     }
 
     @Test
-    public void testSubscribeThrowException() throws ExecutionException, InterruptedException, TimeoutException {
+    public void testSubscribeThrowException() throws InterruptedException {
         CompletableFuture<Void> subscriptionFuture = new CompletableFuture<>();
-        Mockito.when(subscriptionService.subscribe(Mockito.any(), Mockito.any())).thenReturn(subscriptionFuture);
+        Mockito.when(subscriptionService.subscribe(Mockito.any(), Mockito.any(), Mockito.any())).thenReturn(subscriptionFuture);
         new Thread(() -> {
             try {
                 Thread.sleep(2000);
