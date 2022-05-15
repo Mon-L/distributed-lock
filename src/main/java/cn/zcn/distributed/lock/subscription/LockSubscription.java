@@ -9,7 +9,7 @@ public class LockSubscription {
 
     private final LockSubscriptionService subscriptionService;
     private final ConcurrentMap<String, LockSubscriptionEntry> entries = new ConcurrentHashMap<>();
-    private final ConcurrentMap<String, SerialTaskQueen> queens = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, AsyncRunnableQueen> queens = new ConcurrentHashMap<>();
 
     public LockSubscription(LockSubscriptionService subscriptionService) {
         this.subscriptionService = subscriptionService;
@@ -18,34 +18,32 @@ public class LockSubscription {
     public CompletableFuture<LockSubscriptionEntry> subscribe(String channel) {
         CompletableFuture<LockSubscriptionEntry> newPromise = new CompletableFuture<>();
 
-        SerialTaskQueen queen = queens.computeIfAbsent(channel, s -> new SerialTaskQueen());
+        AsyncRunnableQueen queen = queens.computeIfAbsent(channel, s -> new AsyncRunnableQueen());
         queen.add(() -> {
-            LockSubscriptionEntry newSub = new LockSubscriptionEntry(channel, newPromise);
-            newSub.increment();
+            LockSubscriptionEntry newSubEntry = new LockSubscriptionEntry(channel, newPromise);
+            newSubEntry.increment();
 
-            LockSubscriptionEntry oldSub = entries.putIfAbsent(channel, newSub);
-            if (oldSub != null) {
-                oldSub.increment();
-                oldSub.getSubscriptionPromise().whenComplete((lockSubEntry, t) -> {
+            LockSubscriptionEntry oldSubEntry = entries.putIfAbsent(channel, newSubEntry);
+            if (oldSubEntry != null) {
+                oldSubEntry.increment();
+                oldSubEntry.getResult().whenComplete((lockSubEntry, t) -> {
                     queen.runNext();
-                    if (t != null) {
+                    if (t == null) {
+                        newPromise.complete(newSubEntry);
+                    } else {
                         newPromise.completeExceptionally(t);
-                        return;
                     }
-
-                    newPromise.complete(newSub);
                 });
                 return;
             }
 
-            CompletableFuture<?> subFuture = subscriptionService.subscribe(channel, newSub);
+            CompletableFuture<?> subFuture = subscriptionService.subscribe(channel, newSubEntry);
             subFuture.whenComplete((BiConsumer<Object, Throwable>) (r, t) -> {
-                if (t != null) {
+                if (t == null) {
+                    newPromise.complete(newSubEntry);
+                } else {
                     newPromise.completeExceptionally(t);
-                    return;
                 }
-
-                newPromise.complete(newSub);
                 queen.runNext();
             });
         });
@@ -54,13 +52,14 @@ public class LockSubscription {
     }
 
     public void unsubscribe(LockSubscriptionEntry entry, String channel) {
-        SerialTaskQueen serialTaskQueen = queens.get(channel);
-        serialTaskQueen.add(() -> {
+        AsyncRunnableQueen asyncRunnableQueen = queens.get(channel);
+        asyncRunnableQueen.add(() -> {
             if (entry.decrement() == 0) {
+                entries.remove(channel);
                 subscriptionService.unsubscribe(channel)
-                        .whenComplete((BiConsumer<Object, Throwable>) (o, t) -> serialTaskQueen.runNext());
+                        .whenComplete((BiConsumer<Object, Throwable>) (o, t) -> asyncRunnableQueen.runNext());
             } else {
-                serialTaskQueen.runNext();
+                asyncRunnableQueen.runNext();
             }
         });
     }

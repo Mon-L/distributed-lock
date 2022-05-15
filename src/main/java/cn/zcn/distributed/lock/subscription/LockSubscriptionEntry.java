@@ -7,10 +7,22 @@ public class LockSubscriptionEntry implements SubscriptionListener {
 
     public static final Long UNLOCK_MESSAGE = 0L;
 
+    /**
+     * 锁的订阅数量
+     */
     private int count;
+
+    /**
+     * 锁的名称
+     */
     private final String name;
-    private final Semaphore semaphore = new Semaphore(0);
+
+    /**
+     * 订阅结果
+     */
     private final CompletableFuture<LockSubscriptionEntry> subscriptionPromise;
+
+    private final Semaphore semaphore = new Semaphore(0);
 
     public LockSubscriptionEntry(String name, CompletableFuture<LockSubscriptionEntry> subscriptionPromise) {
         this.name = name;
@@ -25,7 +37,7 @@ public class LockSubscriptionEntry implements SubscriptionListener {
         return count--;
     }
 
-    public CompletableFuture<LockSubscriptionEntry> getSubscriptionPromise() {
+    public CompletableFuture<LockSubscriptionEntry> getResult() {
         return subscriptionPromise;
     }
 
@@ -46,6 +58,9 @@ public class LockSubscriptionEntry implements SubscriptionListener {
 
     @Override
     public String toString() {
-        return "lock subscription entry : " + name;
+        return "LockSubscriptionEntry{" +
+                "name=" + name +
+                ", count='" + count + '\'' +
+                '}';
     }
 }

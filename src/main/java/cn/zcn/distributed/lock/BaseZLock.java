@@ -22,7 +22,7 @@ public abstract class BaseZLock implements ZLock {
 
     protected final String lockName;
     protected final String instanceId;
-    
+
     private final Timer renewTimer;
     private final LockSubscription lockSubscription;
     private Timeout renewTimeout;
@@ -55,9 +55,9 @@ public abstract class BaseZLock implements ZLock {
         LockSubscriptionEntry lockSubscriptionEntry;
 
         try {
+            //TODO 处理异常，超时
             lockSubscriptionEntry = subscriptionFuture.get();
         } catch (ExecutionException e) {
-            //TODO
             throw new RuntimeException(e);
         }
 

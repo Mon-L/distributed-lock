@@ -8,12 +8,12 @@ import java.util.concurrent.CompletableFuture;
 public class zookeeperSubscriptionService implements LockSubscriptionService {
 
     @Override
-    public CompletableFuture<?> subscribe(String channel, SubscriptionListener listener) {
+    public CompletableFuture<Void> subscribe(String channel, SubscriptionListener listener) {
         return null;
     }
 
     @Override
-    public CompletableFuture<?> unsubscribe(String channel) {
+    public CompletableFuture<Void> unsubscribe(String channel) {
         return null;
     }
 }

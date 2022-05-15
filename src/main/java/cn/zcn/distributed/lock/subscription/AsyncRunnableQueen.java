@@ -4,9 +4,13 @@ import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class SerialTaskQueen {
+/**
+ * 顺序执行的异步任务队列。必须等上一个任务完成，才能执行下一个任务。
+ */
+public class AsyncRunnableQueen {
 
-    private final AtomicBoolean isRunning = new AtomicBoolean(false);
+    private final AtomicBoolean canRun = new AtomicBoolean(true);
+
     private final Queue<Runnable> tasks = new ConcurrentLinkedQueue<>();
 
     public void add(Runnable runnable) {
@@ -15,16 +19,24 @@ public class SerialTaskQueen {
     }
 
     private void tryRun() {
-        if (isRunning.compareAndSet(false, true)) {
+        if (canRun.compareAndSet(true, false)) {
             Runnable task = tasks.poll();
-            if (task != null) {
-                task.run();
+
+            if (task == null) {
+                canRun.set(true);
+                return;
             }
+
+            task.run();
         }
     }
 
+    public int getQueenSize() {
+        return tasks.size();
+    }
+
     public void runNext() {
-        isRunning.set(true);
+        canRun.set(true);
         tryRun();
     }
 }
