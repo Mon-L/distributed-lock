@@ -10,7 +10,7 @@ public class LockSubscription {
 
     private final LockSubscriptionService subscriptionService;
     private final ConcurrentMap<String, LockSubscriptionEntry> entries = new ConcurrentHashMap<>();
-    private final ConcurrentMap<String, AsyncRunnableQueen> queens = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, SerialRunnableQueen> queens = new ConcurrentHashMap<>();
 
     public LockSubscription(LockSubscriptionService subscriptionService) {
         this.subscriptionService = subscriptionService;
@@ -19,7 +19,7 @@ public class LockSubscription {
     public CompletableFuture<LockSubscriptionEntry> subscribe(String channel) {
         CompletableFuture<LockSubscriptionEntry> newPromise = new CompletableFuture<>();
 
-        AsyncRunnableQueen queen = queens.computeIfAbsent(channel, s -> new AsyncRunnableQueen());
+        SerialRunnableQueen queen = queens.computeIfAbsent(channel, s -> new SerialRunnableQueen());
         queen.add(() -> {
             if (newPromise.isDone()) {
                 return;
@@ -65,7 +65,7 @@ public class LockSubscription {
     }
 
     public void unsubscribe(LockSubscriptionEntry entry, String channel) {
-        AsyncRunnableQueen queen = queens.get(channel);
+        SerialRunnableQueen queen = queens.get(channel);
         queen.add(() -> {
             if (entry.decrement() == 0) {
                 entries.remove(channel);

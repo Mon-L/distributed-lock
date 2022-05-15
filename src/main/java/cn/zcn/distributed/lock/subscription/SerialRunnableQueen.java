@@ -5,9 +5,9 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * 顺序执行的异步任务队列。必须等上一个任务完成，才能执行下一个任务。
+ * 串行执行的任务队列。必须等上一个任务完成，才能执行下一个任务。
  */
-public class AsyncRunnableQueen {
+public class SerialRunnableQueen {
 
     private final AtomicBoolean canRun = new AtomicBoolean(true);
 

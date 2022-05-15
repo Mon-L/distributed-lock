@@ -1,19 +1,19 @@
 package cn.zcn.distributed.lock.redis.subscription;
 
-import cn.zcn.distributed.lock.subscription.AsyncRunnableQueen;
+import cn.zcn.distributed.lock.subscription.SerialRunnableQueen;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.util.concurrent.CountDownLatch;
 
-public class AsyncRunnableQueenTest {
+public class SerialRunnableQueenTest {
 
-    private AsyncRunnableQueen queen;
+    private SerialRunnableQueen queen;
 
     @Before
     public void before() {
-        queen = new AsyncRunnableQueen();
+        queen = new SerialRunnableQueen();
     }
 
     @Test
