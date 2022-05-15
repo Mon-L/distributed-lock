@@ -5,7 +5,7 @@ import cn.zcn.distributed.lock.subscription.SubscriptionListener;
 
 import java.util.concurrent.CompletableFuture;
 
-public class zookeeperSubscriptionService implements LockSubscriptionService {
+public class ZookeeperSubscriptionService implements LockSubscriptionService {
 
     @Override
     public CompletableFuture<Void> subscribe(String channel, SubscriptionListener listener) {

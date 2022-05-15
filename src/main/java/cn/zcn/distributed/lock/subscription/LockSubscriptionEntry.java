@@ -22,7 +22,7 @@ public class LockSubscriptionEntry implements SubscriptionListener {
      */
     private final CompletableFuture<LockSubscriptionEntry> subscriptionPromise;
 
-    private final Semaphore semaphore = new Semaphore(0);
+    private final Semaphore unLockSemaphore = new Semaphore(0);
 
     public LockSubscriptionEntry(String name, CompletableFuture<LockSubscriptionEntry> subscriptionPromise) {
         this.name = name;
@@ -41,8 +41,8 @@ public class LockSubscriptionEntry implements SubscriptionListener {
         return subscriptionPromise;
     }
 
-    public Semaphore getLatch() {
-        return semaphore;
+    public Semaphore getUnLockLatch() {
+        return unLockSemaphore;
     }
 
     @Override
@@ -52,7 +52,7 @@ public class LockSubscriptionEntry implements SubscriptionListener {
         }
 
         if (message.equals(UNLOCK_MESSAGE)) {
-            semaphore.release();
+            unLockSemaphore.release();
         }
     }
 

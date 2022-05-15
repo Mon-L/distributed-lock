@@ -1,5 +1,6 @@
 package cn.zcn.distributed.lock;
 
+import cn.zcn.distributed.lock.exception.LockException;
 import cn.zcn.distributed.lock.subscription.LockSubscription;
 import cn.zcn.distributed.lock.subscription.LockSubscriptionEntry;
 import io.netty.util.Timeout;
@@ -23,48 +24,64 @@ public abstract class BaseZLock implements ZLock {
     protected final String lockName;
     protected final String instanceId;
 
-    private final Timer renewTimer;
+    private final Timer timer;
     private final LockSubscription lockSubscription;
+    private final Config config;
     private Timeout renewTimeout;
+
 
     /**
      * @param lock       分布式锁的名称
      * @param instanceId UUID
-     * @param renewTimer 锁续期定时器
+     * @param timer      定时器
      */
-    public BaseZLock(String lock, String instanceId, Timer renewTimer, LockSubscription lockSubscription) {
+    public BaseZLock(String lock, String instanceId, Timer timer, Config config, LockSubscription lockSubscription) {
         this.lockName = LOCK_PREFIX + lock;
         this.instanceId = instanceId;
-        this.renewTimer = renewTimer;
+        this.timer = timer;
+        this.config = config;
         this.lockSubscription = lockSubscription;
+    }
+
+    private void timeout(CompletableFuture<?> future) {
+        Timeout task = timer.newTimeout(t -> {
+            future.completeExceptionally(new TimeoutException("Subscribe lock timeout."));
+        }, config.getTimeout(), TimeUnit.MILLISECONDS);
+
+        future.whenComplete((r, e) -> task.cancel());
     }
 
     @Override
     public void lock(long duration, TimeUnit durationTimeUnit) throws InterruptedException {
-        String lockEntry = getLockEntry();
+        String lockEntryName = getLockEntry();
         long durationMillis = durationTimeUnit.toMillis(duration);
 
-        Long ttl = innerLock(durationMillis, lockEntry);
+        Long ttl = innerLock(durationMillis, lockEntryName);
         if (ttl == null) {
             //获取锁成功
             return;
         }
 
         //获取锁失败，订阅锁的状态
-        CompletableFuture<LockSubscriptionEntry> subscriptionFuture = lockSubscription.subscribe(lockName);
-        LockSubscriptionEntry lockSubscriptionEntry;
+        CompletableFuture<LockSubscriptionEntry> subPromise = lockSubscription.subscribe(lockName);
+        LockSubscriptionEntry lockSubEntry;
 
         try {
-            //TODO 处理异常，超时
-            lockSubscriptionEntry = subscriptionFuture.get();
+            lockSubEntry = subPromise.get();
+        } catch (InterruptedException e) {
+            subPromise.completeExceptionally(e);
+            throw e;
         } catch (ExecutionException e) {
-            throw new RuntimeException(e);
+            throw new LockException("Unexpected exception while subscribe lock.", e.getCause());
         }
+
+        //监听是否订阅超时
+        timeout(subPromise);
 
         try {
             while (true) {
                 //尝试获取锁
-                ttl = innerLock(durationMillis, lockEntry);
+                ttl = innerLock(durationMillis, lockEntryName);
                 if (ttl == null) {
                     //获取锁成功
                     return;
@@ -72,25 +89,25 @@ public abstract class BaseZLock implements ZLock {
 
                 if (ttl >= 0) {
                     //锁已被其他线程锁定，需等待 ttl 毫秒
-                    lockSubscriptionEntry.getLatch().tryAcquire(ttl, TimeUnit.MILLISECONDS);
+                    lockSubEntry.getUnLockLatch().tryAcquire(ttl, TimeUnit.MILLISECONDS);
                 } else {
                     // 获取锁失败，但锁已过期
-                    lockSubscriptionEntry.getLatch().acquire();
+                    lockSubEntry.getUnLockLatch().acquire();
                 }
             }
         } finally {
-            lockSubscription.unsubscribe(lockSubscriptionEntry, lockName);
+            lockSubscription.unsubscribe(lockSubEntry, lockName);
         }
     }
 
     @Override
     public boolean tryLock(long waitTime, TimeUnit waitTimeUnit, long duration, TimeUnit durationTimeUnit) throws InterruptedException {
-        String lockEntry = getLockEntry();
-        long startMillis = System.currentTimeMillis();
-        long waitTimeMillis = waitTimeUnit.toMillis(waitTime);
-        long durationMillis = durationTimeUnit.toMillis(duration);
+        String lockEntryName = getLockEntry();
+        long startMillis = System.currentTimeMillis(),
+                waitTimeMillis = waitTimeUnit.toMillis(waitTime),
+                durationMillis = durationTimeUnit.toMillis(duration);
 
-        Long ttl = innerLock(durationMillis, lockEntry);
+        Long ttl = innerLock(durationMillis, lockEntryName);
         if (ttl == null) {
             //获取锁成功
             return true;
@@ -102,16 +119,20 @@ public abstract class BaseZLock implements ZLock {
         }
 
         //获取锁失败，订阅锁的状态
-        CompletableFuture<LockSubscriptionEntry> subscriptionFuture = lockSubscription.subscribe(lockName);
-        LockSubscriptionEntry lockSubscriptionEntry;
+        CompletableFuture<LockSubscriptionEntry> subPromise = lockSubscription.subscribe(lockName);
+        LockSubscriptionEntry lockSubEntry;
 
-        //TODO 处理异常
         try {
-            lockSubscriptionEntry = subscriptionFuture.get(waitTimeMillis, TimeUnit.MILLISECONDS);
-        } catch (ExecutionException e) {
-            throw new RuntimeException(e);
-        } catch (TimeoutException e) {
-            throw new RuntimeException(e);
+            lockSubEntry = subPromise.get(waitTimeMillis, TimeUnit.MILLISECONDS);
+        } catch (ExecutionException | TimeoutException e) {
+            if (!subPromise.cancel(false)) {
+                subPromise.whenComplete((r, t) -> {
+                    if (t == null) {
+                        lockSubscription.unsubscribe(r, lockName);
+                    }
+                });
+            }
+            return false;
         }
 
         try {
@@ -122,7 +143,7 @@ public abstract class BaseZLock implements ZLock {
                 }
 
                 //尝试获取锁
-                ttl = innerLock(durationMillis, lockEntry);
+                ttl = innerLock(durationMillis, lockEntryName);
                 if (ttl == null) {
                     //获取锁成功
                     return true;
@@ -134,31 +155,31 @@ public abstract class BaseZLock implements ZLock {
                 }
 
                 if (ttl >= 0 && ttl < waitTimeMillis) {
-                    lockSubscriptionEntry.getLatch().tryAcquire(ttl, TimeUnit.MILLISECONDS);
+                    lockSubEntry.getUnLockLatch().tryAcquire(ttl, TimeUnit.MILLISECONDS);
                 } else {
-                    lockSubscriptionEntry.getLatch().tryAcquire(waitTimeMillis, TimeUnit.MILLISECONDS);
+                    lockSubEntry.getUnLockLatch().tryAcquire(waitTimeMillis, TimeUnit.MILLISECONDS);
                 }
             }
         } finally {
-            lockSubscription.unsubscribe(lockSubscriptionEntry, lockName);
+            lockSubscription.unsubscribe(lockSubEntry, lockName);
         }
     }
 
-    private Long innerLock(long durationMillis, String lockEntry) {
-        Long ttl = doLock(durationMillis, lockEntry);
-        setRenewTimer(ttl, lockEntry);
+    private Long innerLock(long durationMillis, String lockEntryName) {
+        Long ttl = doLock(durationMillis, lockEntryName);
+        setRenewTimer(ttl, lockEntryName);
         return ttl;
     }
 
-    private void setRenewTimer(long durationMillis, String lockEntry) {
-        this.renewTimeout = renewTimer.newTimeout(t -> {
+    private void setRenewTimer(long durationMillis, String lockEntryName) {
+        this.renewTimeout = timer.newTimeout(t -> {
             if (t.isCancelled()) {
                 return;
             }
 
-            long ttl = doRenew(lockEntry);
+            long ttl = doRenew(lockEntryName);
             if (ttl > 0) {
-                setRenewTimer(ttl, lockEntry);
+                setRenewTimer(ttl, lockEntryName);
             } else {
                 t.cancel();
             }
@@ -187,10 +208,6 @@ public abstract class BaseZLock implements ZLock {
      */
     protected String getLockEntry() {
         return instanceId + ":" + Thread.currentThread().getId();
-    }
-
-    protected String getLockName() {
-        return lockName;
     }
 
     /**
