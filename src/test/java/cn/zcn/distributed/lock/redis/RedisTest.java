@@ -46,55 +46,40 @@ public class RedisTest {
     }
 
     @Test
-    public void testSubscribe() {
+    public void testSubscribe() throws Exception {
         Jedis jedis = jedisPool.getResource();
+        JedisPubSub jedisPubSub = new JedisPubSub() {
+            @Override
+            public void onMessage(String channel, String message) {
+                System.out.println("onMessage : " + message);
+            }
+
+            @Override
+            public void onSubscribe(String channel, int subscribedChannels) {
+                System.out.printf("onSubscribe : %s, count : %d\n", channel, subscribedChannels);
+            }
+        };
+
         new Thread(new Runnable() {
-            private int i = 0;
 
             @Override
             public void run() {
-                jedis.subscribe(new JedisPubSub() {
-                    @Override
-                    public void onMessage(String channel, String message) {
-                        System.out.println("s1," + i++);
-                    }
-                }, "f");
+                jedis.subscribe(jedisPubSub, "f", "f2", "f3");
             }
         }).start();
 
         new Thread(new Runnable() {
-            private int i = 0;
-
             @Override
             public void run() {
-                jedis.subscribe(new JedisPubSub() {
-                    @Override
-                    public void onMessage(String channel, String message) {
-                        System.out.println("s2," + i++);
-                    }
-                }, "f");
+                try {
+                    Thread.sleep(3000);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+                jedis.subscribe(jedisPubSub, "f", "f2", "f3", "f4");
             }
         }).start();
 
-        try {
-            Thread.sleep(1000 * 5);
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
-
-        try {
-
-            while (true) {
-                Jedis j = jedisPool.getResource();
-                j.publish("f", "fdsaf");
-                j.publish("f2", "fdsaf");
-
-                j.close();
-                Thread.sleep(1000 * 5);
-            }
-
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
+        Thread.sleep(100000);
     }
 }
