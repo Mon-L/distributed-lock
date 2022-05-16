@@ -83,7 +83,7 @@ public class LockSubscription {
                 return;
             }
 
-            if (message.equals(UNLOCK_MESSAGE)) {
+            if (UNLOCK_MESSAGE.equals(message)) {
                 lockSubscriptionEntry.getUnLockLatch().release();
             }
         };

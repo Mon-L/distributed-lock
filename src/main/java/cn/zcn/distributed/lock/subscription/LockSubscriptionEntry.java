@@ -2,13 +2,14 @@ package cn.zcn.distributed.lock.subscription;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class LockSubscriptionEntry {
 
     /**
      * 锁的订阅数量
      */
-    private int count;
+    private AtomicInteger count = new AtomicInteger(0);
 
     /**
      * 锁的名称
@@ -28,11 +29,11 @@ public class LockSubscriptionEntry {
     }
 
     public void increment() {
-        count++;
+        count.incrementAndGet();
     }
 
     public int decrement() {
-        return count--;
+        return count.decrementAndGet();
     }
 
     public CompletableFuture<LockSubscriptionEntry> getResult() {
