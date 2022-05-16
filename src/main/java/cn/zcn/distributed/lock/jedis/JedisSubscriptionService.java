@@ -84,7 +84,7 @@ public class JedisSubscriptionService implements LockSubscriptionService {
 
             @Override
             public void onSubscribe(byte[] channel, int subscribedChannels) {
-                CompletableFuture<Void> promise = subscribingChannels.remove(new ByteChannelHolder(channel));
+                CompletableFuture<Void> promise = subscribingChannels.get(new ByteChannelHolder(channel));
                 if (promise != null) {
                     promise.complete(null);
                 }
@@ -92,7 +92,7 @@ public class JedisSubscriptionService implements LockSubscriptionService {
 
             @Override
             public void onUnsubscribe(byte[] channel, int subscribedChannels) {
-                CompletableFuture<Void> promise = unsubscribingChannels.remove(new ByteChannelHolder(channel));
+                CompletableFuture<Void> promise = unsubscribingChannels.get(new ByteChannelHolder(channel));
                 if (promise != null) {
                     promise.complete(null);
                 }
@@ -108,6 +108,10 @@ public class JedisSubscriptionService implements LockSubscriptionService {
         CompletableFuture<Void> newPromise = new CompletableFuture<>();
         listeners.put(channelHolder, listener);
         subscribingChannels.put(channelHolder, newPromise);
+
+        promise.whenComplete((r, t) -> {
+            unsubscribe(channel);
+        });
 
         while (true) {
             if (isRunning.get()) {
@@ -133,22 +137,22 @@ public class JedisSubscriptionService implements LockSubscriptionService {
         newPromise.whenComplete((r, t) -> {
             if (t != null) {
                 listeners.remove(channelHolder);
-                subscribingChannels.remove(channelHolder);
             }
+            subscribingChannels.remove(channelHolder);
         });
 
         return newPromise;
     }
 
-    private void start(ByteChannelHolder channel, CompletableFuture<Void> promise) {
+    private void start(ByteChannelHolder channel, CompletableFuture<Void> newPromise) {
         executor.execute(() -> {
             try {
                 //TODO 如何选择一条可用连接
                 Jedis jedis = jedisPool.getResource();
                 jedis.subscribe(pubSub, channel.val);
             } catch (Exception e) {
-                if (!promise.isDone()) {
-                    promise.completeExceptionally(e);
+                if (!newPromise.isDone()) {
+                    newPromise.completeExceptionally(e);
                 }
 
                 //TODO 处理断连情况
@@ -159,7 +163,7 @@ public class JedisSubscriptionService implements LockSubscriptionService {
             }
         });
 
-        promise.whenComplete((r, t) -> {
+        newPromise.whenComplete((r, t) -> {
             if (t != null) {
                 runningPromise.completeExceptionally(t);
                 return;
@@ -176,7 +180,7 @@ public class JedisSubscriptionService implements LockSubscriptionService {
         }, config.getTimeout(), TimeUnit.MILLISECONDS);
 
         promise.whenComplete((r, t) -> {
-            if (timeout.isCancelled()) {
+            if (!timeout.isCancelled()) {
                 timeout.cancel();
             }
         });
@@ -184,11 +188,15 @@ public class JedisSubscriptionService implements LockSubscriptionService {
 
     @Override
     public CompletableFuture<Void> unsubscribe(String channel) {
+        ByteChannelHolder channelHolder = new ByteChannelHolder(channel);
         CompletableFuture<Void> promise = new CompletableFuture<>();
-        if (isRunning.get() && runningPromise.isDone()) {
-            ByteChannelHolder channelHolder = new ByteChannelHolder(channel);
 
+        promise.whenComplete((r, t) -> {
             listeners.remove(channelHolder);
+            unsubscribingChannels.remove(channelHolder);
+        });
+
+        if (isRunning.get() && runningPromise.isDone()) {
             unsubscribingChannels.put(channelHolder, promise);
             pubSub.unsubscribe(channelHolder.val);
 
@@ -196,7 +204,7 @@ public class JedisSubscriptionService implements LockSubscriptionService {
         } else {
             promise.complete(null);
         }
-        
+
         return promise;
     }
 }
