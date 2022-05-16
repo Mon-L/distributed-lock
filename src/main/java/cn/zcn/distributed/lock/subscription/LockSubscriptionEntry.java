@@ -9,7 +9,7 @@ public class LockSubscriptionEntry {
     /**
      * 锁的订阅数量
      */
-    private AtomicInteger count = new AtomicInteger(0);
+    private int count;
 
     /**
      * 锁的名称
@@ -29,11 +29,11 @@ public class LockSubscriptionEntry {
     }
 
     public void increment() {
-        count.incrementAndGet();
+        ++count;
     }
 
     public int decrement() {
-        return count.decrementAndGet();
+        return --count;
     }
 
     public CompletableFuture<LockSubscriptionEntry> getResult() {
@@ -51,4 +51,5 @@ public class LockSubscriptionEntry {
                 ", count='" + count + '\'' +
                 '}';
     }
+
 }
