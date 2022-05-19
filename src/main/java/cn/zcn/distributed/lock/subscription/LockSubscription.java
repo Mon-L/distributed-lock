@@ -22,44 +22,44 @@ public class LockSubscription {
         SerialRunnableQueen queen = queens.computeIfAbsent(channel, s -> new SerialRunnableQueen());
         queen.add(() -> {
             if (newPromise.isDone()) {
+                queen.runNext();
                 return;
             }
 
-            LockSubscriptionEntry entry = new LockSubscriptionEntry(channel, newPromise);
-            entry.increment();
+            LockSubscriptionEntry newEntry = new LockSubscriptionEntry(channel);
+            newEntry.increment();
 
-            LockSubscriptionEntry oldSubEntry = entries.putIfAbsent(channel, entry);
-            if (oldSubEntry != null) {
-                oldSubEntry.increment();
-                oldSubEntry.getResult().whenComplete((lockSubEntry, t) -> {
-                    if (t == null) {
-                        newPromise.complete(entry);
-                    } else {
+            LockSubscriptionEntry oldEntry = entries.putIfAbsent(channel, newEntry);
+            if (oldEntry != null) {
+                oldEntry.increment();
+                queen.runNext();
+                oldEntry.getPromise().whenComplete((r, t) -> {
+                    if (t != null) {
                         newPromise.completeExceptionally(t);
+                        unsubscribe(oldEntry, channel);
+                    } else {
+                        newPromise.complete(r);
                     }
                 });
                 return;
             }
 
-            SubscriptionListener listener = createListener(channel, entry);
-            CompletableFuture<?> subscriptionPromise = subscriptionService.subscribe(channel, listener, newPromise);
-
-            newPromise.whenComplete((r, e) -> {
-                if (e != null) {
-                    subscriptionPromise.completeExceptionally(e);
-                }
+            SubscriptionListener listener = createListener(channel, newEntry);
+            CompletableFuture<?> subscriptionPromise = subscriptionService.subscribe(channel, listener);
+            subscriptionPromise.whenComplete((r, t) -> {
+                newEntry.complete(t);
             });
 
-            subscriptionPromise.whenComplete((r, t) -> {
-                if (t == null) {
-                    entry.getResult().complete(entry);
+            newEntry.getPromise().whenComplete((r, t) -> {
+                if (t != null) {
+                    newPromise.completeExceptionally(t);
+                    unsubscribe(newEntry, channel);
                 } else {
-                    entry.getResult().completeExceptionally(t);
+                    newPromise.complete(r);
                 }
+                queen.runNext();
             });
         });
-
-        newPromise.whenComplete((r, e) -> queen.runNext());
 
         return newPromise;
     }

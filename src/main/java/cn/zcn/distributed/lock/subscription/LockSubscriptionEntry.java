@@ -2,14 +2,13 @@ package cn.zcn.distributed.lock.subscription;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Semaphore;
-import java.util.concurrent.atomic.AtomicInteger;
 
 public class LockSubscriptionEntry {
 
     /**
      * 锁的订阅数量
      */
-    private int count;
+    private volatile int count;
 
     /**
      * 锁的名称
@@ -19,13 +18,13 @@ public class LockSubscriptionEntry {
     /**
      * 订阅结果
      */
-    private final CompletableFuture<LockSubscriptionEntry> subscriptionPromise;
+    private final CompletableFuture<LockSubscriptionEntry> promise;
 
     private final Semaphore unLockSemaphore = new Semaphore(0);
 
-    public LockSubscriptionEntry(String name, CompletableFuture<LockSubscriptionEntry> subscriptionPromise) {
+    public LockSubscriptionEntry(String name) {
         this.name = name;
-        this.subscriptionPromise = subscriptionPromise;
+        this.promise = new CompletableFuture<>();
     }
 
     public void increment() {
@@ -36,8 +35,16 @@ public class LockSubscriptionEntry {
         return --count;
     }
 
-    public CompletableFuture<LockSubscriptionEntry> getResult() {
-        return subscriptionPromise;
+    public void complete(Throwable t) {
+        if (t != null) {
+            promise.completeExceptionally(t);
+        } else {
+            promise.complete(this);
+        }
+    }
+
+    public CompletableFuture<LockSubscriptionEntry> getPromise() {
+        return promise;
     }
 
     public Semaphore getUnLockLatch() {

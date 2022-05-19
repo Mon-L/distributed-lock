@@ -1,7 +1,6 @@
 package cn.zcn.distributed.lock.jedis;
 
 import cn.zcn.distributed.lock.Config;
-import cn.zcn.distributed.lock.subscription.LockSubscriptionEntry;
 import cn.zcn.distributed.lock.subscription.LockSubscriptionService;
 import cn.zcn.distributed.lock.subscription.SubscriptionListener;
 import io.netty.util.Timeout;
@@ -103,14 +102,18 @@ public class JedisSubscriptionService implements LockSubscriptionService {
     }
 
     @Override
-    public CompletableFuture<Void> subscribe(String channel, SubscriptionListener listener, CompletableFuture<LockSubscriptionEntry> promise) {
+    public CompletableFuture<Void> subscribe(String channel, SubscriptionListener listener) {
         ByteChannelHolder channelHolder = new ByteChannelHolder(channel);
         CompletableFuture<Void> newPromise = new CompletableFuture<>();
         listeners.put(channelHolder, listener);
         subscribingChannels.put(channelHolder, newPromise);
 
-        promise.whenComplete((r, t) -> {
-            unsubscribe(channel);
+        newPromise.whenComplete((r, t) -> {
+            subscribingChannels.remove(channelHolder);
+
+            if (t != null) {
+                listeners.remove(channelHolder);
+            }
         });
 
         while (true) {
@@ -121,7 +124,11 @@ public class JedisSubscriptionService implements LockSubscriptionService {
                         return;
                     }
 
-                    pubSub.subscribe(channelHolder.val);
+                    try {
+                        pubSub.subscribe(channelHolder.val);
+                    } catch (JedisConnectionException e) {
+                        newPromise.completeExceptionally(e);
+                    }
                 });
                 break;
             } else {
@@ -133,13 +140,6 @@ public class JedisSubscriptionService implements LockSubscriptionService {
         }
 
         timeout(newPromise, "Subscribe lock timeout.");
-
-        newPromise.whenComplete((r, t) -> {
-            if (t != null) {
-                listeners.remove(channelHolder);
-            }
-            subscribingChannels.remove(channelHolder);
-        });
 
         return newPromise;
     }
@@ -189,22 +189,26 @@ public class JedisSubscriptionService implements LockSubscriptionService {
     @Override
     public CompletableFuture<Void> unsubscribe(String channel) {
         ByteChannelHolder channelHolder = new ByteChannelHolder(channel);
-        CompletableFuture<Void> promise = new CompletableFuture<>();
+        CompletableFuture<Void> newPromise = new CompletableFuture<>();
 
-        promise.whenComplete((r, t) -> {
+        if (isRunning.get()) {
+            unsubscribingChannels.put(channelHolder, newPromise);
+            newPromise.whenComplete((r, t) -> {
+                unsubscribingChannels.remove(channelHolder);
+            });
+
             listeners.remove(channelHolder);
-            unsubscribingChannels.remove(channelHolder);
-        });
 
-        if (isRunning.get() && runningPromise.isDone()) {
-            unsubscribingChannels.put(channelHolder, promise);
-            pubSub.unsubscribe(channelHolder.val);
-
-            timeout(promise, "Unsubscribe lock timeout.");
+            try {
+                pubSub.unsubscribe(channelHolder.val);
+                timeout(newPromise, "Unsubscribe lock timeout.");
+            } catch (JedisConnectionException e) {
+                newPromise.completeExceptionally(e);
+            }
         } else {
-            promise.complete(null);
+            newPromise.complete(null);
         }
 
-        return promise;
+        return newPromise;
     }
 }

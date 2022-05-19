@@ -2,12 +2,18 @@ package cn.zcn.distributed.lock.redis;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.redisson.Redisson;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
+import org.redisson.config.Config;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.JedisPubSub;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 
 public class RedisTest {
 
@@ -81,5 +87,79 @@ public class RedisTest {
         }).start();
 
         Thread.sleep(100000);
+    }
+
+    @Test
+    public void redisson() throws Exception {
+        Config config = new Config();
+        config.useSingleServer()
+                .setPassword("123456")
+                .setAddress("redis://127.0.0.1:6379");
+        RedissonClient redisson = Redisson.create(config);
+        RLock lock = redisson.getLock("fff");
+
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    lock.lockInterruptibly();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }).start();
+
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    Thread.sleep(10000);
+
+                    lock.lockInterruptibly();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }).start();
+
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    Thread.sleep(20000);
+                    lock.lockInterruptibly();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }).start();
+
+        Thread.sleep(100000);
+    }
+
+    @Test
+    public void testCompleteOrder() throws InterruptedException {
+        CompletableFuture<Boolean> future = CompletableFuture.supplyAsync(new Supplier<Boolean>() {
+            @Override
+            public Boolean get() {
+                try {
+                    Thread.sleep(3000);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+                System.out.println(Thread.currentThread().getName());
+                return true;
+            }
+        });
+
+        future.whenComplete((r, t) -> {
+            System.out.println("1");
+        });
+
+        future.whenComplete((r, t) -> {
+            System.out.println("2");
+        });
+
+        Thread.sleep(70000);
     }
 }
