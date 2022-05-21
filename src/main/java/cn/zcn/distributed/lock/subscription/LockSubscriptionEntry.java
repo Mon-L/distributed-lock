@@ -51,6 +51,10 @@ public class LockSubscriptionEntry {
         return unLockSemaphore;
     }
 
+    public int getCount() {
+        return count;
+    }
+
     @Override
     public String toString() {
         return "LockSubscriptionEntry{" +
@@ -58,5 +62,4 @@ public class LockSubscriptionEntry {
                 ", count='" + count + '\'' +
                 '}';
     }
-
 }

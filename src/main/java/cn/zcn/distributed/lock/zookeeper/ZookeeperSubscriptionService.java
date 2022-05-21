@@ -16,4 +16,9 @@ public class ZookeeperSubscriptionService implements LockSubscriptionService {
     public CompletableFuture<Void> unsubscribe(String channel) {
         return null;
     }
+
+    @Override
+    public void close() {
+
+    }
 }

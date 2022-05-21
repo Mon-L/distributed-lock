@@ -22,6 +22,7 @@ public class LockSubscription {
         SerialRunnableQueen queen = queens.computeIfAbsent(channel, s -> new SerialRunnableQueen());
         queen.add(() -> {
             if (newPromise.isDone()) {
+                //订阅被打断或超时
                 queen.runNext();
                 return;
             }
@@ -46,16 +47,19 @@ public class LockSubscription {
 
             SubscriptionListener listener = createListener(channel, newEntry);
             CompletableFuture<?> subscriptionPromise = subscriptionService.subscribe(channel, listener);
-            subscriptionPromise.whenComplete((r, t) -> {
-                newEntry.complete(t);
-            });
+            subscriptionPromise.whenComplete((r, t) -> newEntry.complete(t));
 
             newEntry.getPromise().whenComplete((r, t) -> {
-                if (t != null) {
-                    newPromise.completeExceptionally(t);
+                if (newPromise.isDone()) {
+                    //订阅被打断或超时
                     unsubscribe(newEntry, channel);
                 } else {
-                    newPromise.complete(r);
+                    if (t != null) {
+                        newPromise.completeExceptionally(t);
+                        unsubscribe(newEntry, channel);
+                    } else {
+                        newPromise.complete(r);
+                    }
                 }
                 queen.runNext();
             });
