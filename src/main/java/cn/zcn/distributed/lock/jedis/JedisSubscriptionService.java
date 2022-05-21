@@ -211,4 +211,9 @@ public class JedisSubscriptionService implements LockSubscriptionService {
 
         return newPromise;
     }
+
+    @Override
+    public void close() {
+
+    }
 }
