@@ -1,5 +1,5 @@
 package cn.zcn.distributed.lock.subscription;
 
-public interface SubscriptionListener {
+public interface LockSubscriptionListener {
     void onMessage(String channel, Object message);
 }

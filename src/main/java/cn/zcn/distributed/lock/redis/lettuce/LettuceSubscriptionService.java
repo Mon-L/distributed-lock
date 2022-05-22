@@ -1,7 +1,7 @@
-package cn.zcn.distributed.lock.lettuce;
+package cn.zcn.distributed.lock.redis.lettuce;
 
 import cn.zcn.distributed.lock.subscription.LockSubscriptionService;
-import cn.zcn.distributed.lock.subscription.SubscriptionListener;
+import cn.zcn.distributed.lock.subscription.LockSubscriptionListener;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -13,7 +13,7 @@ public class LettuceSubscriptionService implements LockSubscriptionService {
     }
 
     @Override
-    public CompletableFuture<Void> subscribe(String channel, SubscriptionListener listener) {
+    public CompletableFuture<Void> subscribe(String channel, LockSubscriptionListener listener) {
         return null;
     }
 

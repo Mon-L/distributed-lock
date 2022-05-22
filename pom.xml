@@ -14,6 +14,7 @@
         <netty.version>4.1.77.Final</netty.version>
         <jedis.version>4.2.2</jedis.version>
         <zookeeper.version>3.8.0</zookeeper.version>
+        <lettuce.version>5.2.2.RELEASE</lettuce.version>
     </properties>
 
     <dependencies>
@@ -41,6 +42,13 @@
             <groupId>redis.clients</groupId>
             <artifactId>jedis</artifactId>
             <version>${jedis.version}</version>
+            <scope>compile</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>io.lettuce</groupId>
+            <artifactId>lettuce-core</artifactId>
+            <version>5.2.2.RELEASE</version>
             <scope>compile</scope>
         </dependency>
 

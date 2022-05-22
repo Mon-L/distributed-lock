@@ -1,14 +1,11 @@
-package cn.zcn.distributed.lock.jedis;
+package cn.zcn.distributed.lock.redis;
 
 import cn.zcn.distributed.lock.Config;
 import cn.zcn.distributed.lock.subscription.LockSubscriptionService;
 import cn.zcn.distributed.lock.subscription.SerialRunnableQueen;
-import cn.zcn.distributed.lock.subscription.SubscriptionListener;
+import cn.zcn.distributed.lock.subscription.LockSubscriptionListener;
 import io.netty.util.Timeout;
 import io.netty.util.Timer;
-import redis.clients.jedis.BinaryJedisPubSub;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -17,11 +14,13 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.*;
 
-public class JedisSubscriptionService implements LockSubscriptionService {
+public class RedisSubscriptionService implements LockSubscriptionService {
 
     private final Config config;
     private final Timer timer;
-    private final JedisPool jedisPool;
+    private final RedisCommandFactory commandFactory;
+    private RedisSubscription redisSubscription;
+    private RedisSubscriptionListener redisSubscriptionListener;
 
     /**
      * 标识jedis订阅服务是否正在允许
@@ -35,15 +34,14 @@ public class JedisSubscriptionService implements LockSubscriptionService {
     private final SubscriptionTask subscriptionTask = new SubscriptionTask();
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final SerialRunnableQueen queen = new SerialRunnableQueen();
-    private final Map<ByteArrayWrapper, SubscriptionListener> listeners = new ConcurrentHashMap<>();
+    private final Map<ByteArrayWrapper, LockSubscriptionListener> listeners = new ConcurrentHashMap<>();
     private final Map<ByteArrayWrapper, CompletableFuture<Void>> subscribing = new ConcurrentHashMap<>();
-    private final DispatchSubscriptionListener dispatchMessageListener = new DispatchSubscriptionListener();
-    private BinaryJedisPubSub jedisPubSub;
+    private final DispatchLockSubscriptionListener dispatchMessageListener = new DispatchLockSubscriptionListener();
 
-    private class DispatchSubscriptionListener implements SubscriptionListener {
+    private class DispatchLockSubscriptionListener implements LockSubscriptionListener {
         @Override
         public void onMessage(String channel, Object message) {
-            SubscriptionListener l = listeners.get(new ByteArrayWrapper(channel));
+            LockSubscriptionListener l = listeners.get(new ByteArrayWrapper(channel));
             if (l != null) {
                 l.onMessage(channel, message);
             }
@@ -77,17 +75,17 @@ public class JedisSubscriptionService implements LockSubscriptionService {
         }
     }
 
-    public JedisSubscriptionService(Config config, JedisPool jedisPool, Timer timer) {
+    public RedisSubscriptionService(Config config, RedisCommandFactory commandFactory, Timer timer) {
         this.config = config;
         this.timer = timer;
-        this.jedisPool = jedisPool;
+        this.commandFactory = commandFactory;
     }
 
     @Override
     public void start() {
         if (!running) {
             running = true;
-            jedisPubSub = new BinaryJedisPubSub() {
+            redisSubscriptionListener = new RedisSubscriptionListener() {
                 @Override
                 public void onMessage(byte[] channel, byte[] message) {
                     dispatchMessageListener.onMessage(new String(channel), message);
@@ -100,15 +98,29 @@ public class JedisSubscriptionService implements LockSubscriptionService {
                         promise.complete(null);
                     }
                 }
+
+                @Override
+                public void onUnsubscribe(byte[] channel) {
+                }
             };
 
-            //启动订阅任务
-            executor.execute(subscriptionTask);
+            doListen();
         }
     }
 
+    private void doListen() {
+        //启动订阅任务
+        CompletableFuture<Void> promise = CompletableFuture.runAsync(subscriptionTask, executor);
+        promise.whenComplete((r, t) -> {
+            if (listening) {
+                doListen();
+            }
+        });
+        redisSubscription = commandFactory.getSubscription();
+    }
+
     @Override
-    public CompletableFuture<Void> subscribe(String channel, SubscriptionListener listener) {
+    public CompletableFuture<Void> subscribe(String channel, LockSubscriptionListener listener) {
         CompletableFuture<Void> newPromise = new CompletableFuture<>();
         ByteArrayWrapper wrapper = new ByteArrayWrapper(channel);
 
@@ -131,7 +143,7 @@ public class JedisSubscriptionService implements LockSubscriptionService {
 
             if (listening) {
                 try {
-                    jedisPubSub.subscribe(wrapper.val);
+                    redisSubscription.subscribe(wrapper.val);
                 } catch (Exception e) {
                     newPromise.completeExceptionally(e);
                 }
@@ -160,7 +172,7 @@ public class JedisSubscriptionService implements LockSubscriptionService {
 
             if (listening) {
                 try {
-                    jedisPubSub.unsubscribe(wrapper.val);
+                    redisSubscription.unsubscribe(wrapper.val);
                     newPromise.complete(null);
                 } catch (Exception e) {
                     newPromise.completeExceptionally(e);
@@ -215,24 +227,19 @@ public class JedisSubscriptionService implements LockSubscriptionService {
 
     private class SubscriptionTask implements Runnable {
 
-        private Jedis jedis;
-
         @Override
         public void run() {
-            while (running) {
-                try {
-                    jedis = jedisPool.getResource();
-                    listening = true;
-                    jedis.subscribe(jedisPubSub, unwrap(listeners.keySet()));
-                } catch (Exception e) {
-                    listening = false;
-                    if (jedis != null) {
-                        jedis.close();
-                    }
+            try {
+                listening = true;
+                commandFactory.subscribe(redisSubscriptionListener, unwrap(listeners.keySet()));
+            } catch (Exception e) {
+                listening = false;
+                if (redisSubscription != null) {
+                    redisSubscription.close();
+                }
 
-                    if (running) {
-                        sleepBeforeReconnect();
-                    }
+                if (running) {
+                    sleepBeforeReconnect();
                 }
             }
         }
@@ -247,8 +254,8 @@ public class JedisSubscriptionService implements LockSubscriptionService {
 
         private void shutdown() {
             listening = false;
-            if (jedis != null) {
-                jedis.close();
+            if (redisSubscription != null) {
+                redisSubscription.close();
             }
         }
     }
