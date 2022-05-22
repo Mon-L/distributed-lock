@@ -8,6 +8,11 @@ import java.util.concurrent.CompletableFuture;
 public class LettuceSubscriptionService implements LockSubscriptionService {
 
     @Override
+    public void start() {
+
+    }
+
+    @Override
     public CompletableFuture<Void> subscribe(String channel, SubscriptionListener listener) {
         return null;
     }
@@ -18,7 +23,7 @@ public class LettuceSubscriptionService implements LockSubscriptionService {
     }
 
     @Override
-    public void close() {
+    public void stop() {
 
     }
 }

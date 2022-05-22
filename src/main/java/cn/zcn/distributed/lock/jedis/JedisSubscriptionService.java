@@ -2,62 +2,71 @@ package cn.zcn.distributed.lock.jedis;
 
 import cn.zcn.distributed.lock.Config;
 import cn.zcn.distributed.lock.subscription.LockSubscriptionService;
+import cn.zcn.distributed.lock.subscription.SerialRunnableQueen;
 import cn.zcn.distributed.lock.subscription.SubscriptionListener;
 import io.netty.util.Timeout;
 import io.netty.util.Timer;
 import redis.clients.jedis.BinaryJedisPubSub;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
-import redis.clients.jedis.exceptions.JedisConnectionException;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 public class JedisSubscriptionService implements LockSubscriptionService {
 
     private final Config config;
     private final Timer timer;
     private final JedisPool jedisPool;
-    private final DispatchSubscriptionListener dispatchMessageListener = new DispatchSubscriptionListener();
-    private final AtomicBoolean isRunning = new AtomicBoolean(false);
-    private final Map<ByteChannelHolder, CompletableFuture<Void>> subscribingChannels = new ConcurrentHashMap<>();
-    private final Map<ByteChannelHolder, CompletableFuture<Void>> unsubscribingChannels = new ConcurrentHashMap<>();
-    private final Map<ByteChannelHolder, SubscriptionListener> listeners = new ConcurrentHashMap<>();
 
-    private BinaryJedisPubSub pubSub;
-    private ExecutorService executor;
-    private CompletableFuture<Boolean> runningPromise = new CompletableFuture<>();
+    /**
+     * 标识jedis订阅服务是否正在允许
+     */
+    private volatile boolean running = false;
+
+    /**
+     * 标识jedis是否在订阅主题中。订阅未开始或者连接断开后listening为false
+     */
+    private volatile boolean listening = false;
+    private final SubscriptionTask subscriptionTask = new SubscriptionTask();
+    private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private final SerialRunnableQueen queen = new SerialRunnableQueen();
+    private final Map<ByteArrayWrapper, SubscriptionListener> listeners = new ConcurrentHashMap<>();
+    private final Map<ByteArrayWrapper, CompletableFuture<Void>> subscribing = new ConcurrentHashMap<>();
+    private final DispatchSubscriptionListener dispatchMessageListener = new DispatchSubscriptionListener();
+    private BinaryJedisPubSub jedisPubSub;
 
     private class DispatchSubscriptionListener implements SubscriptionListener {
         @Override
         public void onMessage(String channel, Object message) {
-            SubscriptionListener listener = listeners.get(new ByteChannelHolder(channel));
-            if (listener != null) {
-                listener.onMessage(channel, message);
+            SubscriptionListener l = listeners.get(new ByteArrayWrapper(channel));
+            if (l != null) {
+                l.onMessage(channel, message);
             }
         }
     }
 
-    private static class ByteChannelHolder {
+    private static class ByteArrayWrapper {
         private final byte[] val;
 
-        private ByteChannelHolder(String channel) {
-            this.val = channel.getBytes(StandardCharsets.UTF_8);
+        private ByteArrayWrapper(String str) {
+            this.val = str.getBytes(StandardCharsets.UTF_8);
         }
 
-        private ByteChannelHolder(byte[] channel) {
-            this.val = channel;
+        private ByteArrayWrapper(byte[] val) {
+            this.val = val;
         }
 
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
-            if (!(o instanceof ByteChannelHolder)) return false;
+            if (!(o instanceof ByteArrayWrapper)) return false;
 
-            ByteChannelHolder that = (ByteChannelHolder) o;
+            ByteArrayWrapper that = (ByteArrayWrapper) o;
 
             return Arrays.equals(val, that.val);
         }
@@ -74,102 +83,111 @@ public class JedisSubscriptionService implements LockSubscriptionService {
         this.jedisPool = jedisPool;
     }
 
-    public void init() {
-        pubSub = new BinaryJedisPubSub() {
-            @Override
-            public void onMessage(byte[] channel, byte[] message) {
-                dispatchMessageListener.onMessage(new String(channel), message);
-            }
-
-            @Override
-            public void onSubscribe(byte[] channel, int subscribedChannels) {
-                CompletableFuture<Void> promise = subscribingChannels.get(new ByteChannelHolder(channel));
-                if (promise != null) {
-                    promise.complete(null);
+    @Override
+    public void start() {
+        if (!running) {
+            running = true;
+            jedisPubSub = new BinaryJedisPubSub() {
+                @Override
+                public void onMessage(byte[] channel, byte[] message) {
+                    dispatchMessageListener.onMessage(new String(channel), message);
                 }
-            }
 
-            @Override
-            public void onUnsubscribe(byte[] channel, int subscribedChannels) {
-                CompletableFuture<Void> promise = unsubscribingChannels.get(new ByteChannelHolder(channel));
-                if (promise != null) {
-                    promise.complete(null);
+                @Override
+                public void onSubscribe(byte[] channel, int subscribedChannels) {
+                    CompletableFuture<Void> promise = subscribing.remove(new ByteArrayWrapper(channel));
+                    if (promise != null) {
+                        promise.complete(null);
+                    }
                 }
-            }
-        };
+            };
 
-        executor = Executors.newSingleThreadExecutor();
+            //启动订阅任务
+            executor.execute(subscriptionTask);
+        }
     }
 
     @Override
     public CompletableFuture<Void> subscribe(String channel, SubscriptionListener listener) {
-        ByteChannelHolder channelHolder = new ByteChannelHolder(channel);
         CompletableFuture<Void> newPromise = new CompletableFuture<>();
-        listeners.put(channelHolder, listener);
-        subscribingChannels.put(channelHolder, newPromise);
+        ByteArrayWrapper wrapper = new ByteArrayWrapper(channel);
 
         newPromise.whenComplete((r, t) -> {
-            subscribingChannels.remove(channelHolder);
-
+            //订阅异常或超时
             if (t != null) {
-                listeners.remove(channelHolder);
+                listeners.remove(wrapper);
+                subscribing.remove(wrapper);
             }
         });
 
-        while (true) {
-            if (isRunning.get()) {
-                runningPromise.whenComplete((r, t) -> {
-                    if (t != null) {
-                        newPromise.completeExceptionally(t);
-                        return;
-                    }
+        queen.add(() -> {
+            if (newPromise.isDone()) {
+                queen.runNext();
+                return;
+            }
 
-                    try {
-                        pubSub.subscribe(channelHolder.val);
-                    } catch (JedisConnectionException e) {
-                        newPromise.completeExceptionally(e);
-                    }
-                });
-                break;
-            } else {
-                if (isRunning.compareAndSet(false, true)) {
-                    start(channelHolder, newPromise);
-                    break;
+            listeners.put(wrapper, listener);
+            subscribing.put(wrapper, newPromise);
+
+            if (listening) {
+                try {
+                    jedisPubSub.subscribe(wrapper.val);
+                } catch (Exception e) {
+                    newPromise.completeExceptionally(e);
                 }
             }
-        }
 
-        timeout(newPromise, "Subscribe lock timeout.");
+            queen.runNext();
+        });
+
+        timeout(newPromise, "Subscribe channel timeout.");
 
         return newPromise;
     }
 
-    private void start(ByteChannelHolder channel, CompletableFuture<Void> newPromise) {
-        executor.execute(() -> {
-            try {
-                //TODO 如何选择一条可用连接
-                Jedis jedis = jedisPool.getResource();
-                jedis.subscribe(pubSub, channel.val);
-            } catch (Exception e) {
-                if (!newPromise.isDone()) {
-                    newPromise.completeExceptionally(e);
-                }
+    @Override
+    public CompletableFuture<Void> unsubscribe(String channel) {
+        CompletableFuture<Void> newPromise = new CompletableFuture<>();
+        ByteArrayWrapper wrapper = new ByteArrayWrapper(channel);
 
-                //TODO 处理断连情况
-                if (e instanceof JedisConnectionException) {
-                    isRunning.set(false);
-                    runningPromise = new CompletableFuture<>();
-                }
-            }
-        });
-
-        newPromise.whenComplete((r, t) -> {
-            if (t != null) {
-                runningPromise.completeExceptionally(t);
+        queen.add(() -> {
+            if (newPromise.isDone()) {
+                queen.runNext();
                 return;
             }
-            runningPromise.complete(true);
+
+            listeners.remove(wrapper);
+
+            if (listening) {
+                try {
+                    jedisPubSub.unsubscribe(wrapper.val);
+                    newPromise.complete(null);
+                } catch (Exception e) {
+                    newPromise.completeExceptionally(e);
+                }
+            }
+
+            queen.runNext();
         });
+
+        timeout(newPromise, "Unsubscribe channel timeout.");
+
+        return newPromise;
+    }
+
+    private byte[][] unwrap(Set<ByteArrayWrapper> keys) {
+        if (keys.isEmpty()) {
+            return new byte[0][0];
+        }
+
+        byte[][] channels = new byte[keys.size()][];
+        Iterator<ByteArrayWrapper> iter = keys.iterator();
+        int i = 0;
+        while (iter.hasNext()) {
+            channels[i++] = iter.next().val;
+        }
+
+        return channels;
     }
 
     private void timeout(CompletableFuture<Void> promise, String err) {
@@ -187,33 +205,51 @@ public class JedisSubscriptionService implements LockSubscriptionService {
     }
 
     @Override
-    public CompletableFuture<Void> unsubscribe(String channel) {
-        ByteChannelHolder channelHolder = new ByteChannelHolder(channel);
-        CompletableFuture<Void> newPromise = new CompletableFuture<>();
-
-        if (isRunning.get()) {
-            unsubscribingChannels.put(channelHolder, newPromise);
-            newPromise.whenComplete((r, t) -> {
-                unsubscribingChannels.remove(channelHolder);
-            });
-
-            listeners.remove(channelHolder);
-
-            try {
-                pubSub.unsubscribe(channelHolder.val);
-                timeout(newPromise, "Unsubscribe lock timeout.");
-            } catch (JedisConnectionException e) {
-                newPromise.completeExceptionally(e);
-            }
-        } else {
-            newPromise.complete(null);
+    public void stop() {
+        if (running) {
+            running = false;
+            subscriptionTask.shutdown();
+            executor.shutdown();
         }
-
-        return newPromise;
     }
 
-    @Override
-    public void close() {
+    private class SubscriptionTask implements Runnable {
 
+        private Jedis jedis;
+
+        @Override
+        public void run() {
+            while (running) {
+                try {
+                    jedis = jedisPool.getResource();
+                    listening = true;
+                    jedis.subscribe(jedisPubSub, unwrap(listeners.keySet()));
+                } catch (Exception e) {
+                    listening = false;
+                    if (jedis != null) {
+                        jedis.close();
+                    }
+
+                    if (running) {
+                        sleepBeforeReconnect();
+                    }
+                }
+            }
+        }
+
+        private void sleepBeforeReconnect() {
+            try {
+                Thread.sleep(config.getReconnectInterval());
+            } catch (InterruptedException interEx) {
+                Thread.currentThread().interrupt();
+            }
+        }
+
+        private void shutdown() {
+            listening = false;
+            if (jedis != null) {
+                jedis.close();
+            }
+        }
     }
 }

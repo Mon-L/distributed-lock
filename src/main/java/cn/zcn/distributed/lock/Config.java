@@ -7,7 +7,16 @@ public class Config {
      */
     private int timeout;
 
+    /**
+     * 重连间隔
+     */
+    private long reconnectInterval = 5000;
+
     public int getTimeout() {
         return timeout;
+    }
+
+    public long getReconnectInterval() {
+        return reconnectInterval;
     }
 }

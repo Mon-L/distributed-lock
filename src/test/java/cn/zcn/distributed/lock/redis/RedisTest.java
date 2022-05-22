@@ -2,13 +2,9 @@ package cn.zcn.distributed.lock.redis;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.redisson.Redisson;
-import org.redisson.api.RLock;
-import org.redisson.api.RedissonClient;
-import org.redisson.config.Config;
+import redis.clients.jedis.BinaryJedisPubSub;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
-import redis.clients.jedis.JedisPubSub;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -54,85 +50,25 @@ public class RedisTest {
     @Test
     public void testSubscribe() throws Exception {
         Jedis jedis = jedisPool.getResource();
-        JedisPubSub jedisPubSub = new JedisPubSub() {
+        BinaryJedisPubSub jedisPubSub = new BinaryJedisPubSub() {
+
             @Override
-            public void onMessage(String channel, String message) {
-                System.out.println("onMessage : " + message);
+            public void onMessage(byte[] channel, byte[] message) {
+                System.out.println("onMessage : " + new String(message));
             }
 
             @Override
-            public void onSubscribe(String channel, int subscribedChannels) {
-                System.out.printf("onSubscribe : %s, count : %d\n", channel, subscribedChannels);
+            public void onSubscribe(byte[] channel, int subscribedChannels) {
+                System.out.printf("onSubscribe : %s, count : %d\n", new String(channel), subscribedChannels);
             }
         };
 
         new Thread(new Runnable() {
-
             @Override
             public void run() {
-                jedis.subscribe(jedisPubSub, "f", "f2", "f3");
+                jedisPubSub.subscribe(new byte[0]);
             }
-        }).start();
-
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    Thread.sleep(3000);
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-                jedis.subscribe(jedisPubSub, "f", "f2", "f3", "f4");
-            }
-        }).start();
-
-        Thread.sleep(100000);
-    }
-
-    @Test
-    public void redisson() throws Exception {
-        Config config = new Config();
-        config.useSingleServer()
-                .setPassword("123456")
-                .setAddress("redis://127.0.0.1:6379");
-        RedissonClient redisson = Redisson.create(config);
-        RLock lock = redisson.getLock("fff");
-
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    lock.lockInterruptibly();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }
-        }).start();
-
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    Thread.sleep(10000);
-
-                    lock.lockInterruptibly();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }
-        }).start();
-
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    Thread.sleep(20000);
-                    lock.lockInterruptibly();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }
-        }).start();
+        });
 
         Thread.sleep(100000);
     }
