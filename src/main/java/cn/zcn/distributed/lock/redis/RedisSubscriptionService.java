@@ -100,7 +100,7 @@ public class RedisSubscriptionService implements LockSubscriptionService {
                 }
 
                 @Override
-                public void onUnsubscribe(byte[] channel) {
+                public void onUnsubscribe(byte[] channel, int subscribedChannels) {
                 }
             };
 

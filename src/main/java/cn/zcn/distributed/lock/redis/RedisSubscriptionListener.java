@@ -5,5 +5,5 @@ public interface RedisSubscriptionListener {
 
     void onSubscribe(byte[] channel, int subscribedChannels);
 
-    void onUnsubscribe(byte[] channel);
+    void onUnsubscribe(byte[] channel, int subscribedChannels);
 }

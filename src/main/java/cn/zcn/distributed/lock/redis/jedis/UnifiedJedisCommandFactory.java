@@ -9,7 +9,8 @@ import java.util.List;
 
 public class UnifiedJedisCommandFactory implements RedisCommandFactory {
 
-    private UnifiedJedis unifiedJedis;
+    private final UnifiedJedis unifiedJedis;
+    private RedisSubscription subscription;
 
     public UnifiedJedisCommandFactory(UnifiedJedis unifiedJedis) {
         this.unifiedJedis = unifiedJedis;
@@ -17,16 +18,18 @@ public class UnifiedJedisCommandFactory implements RedisCommandFactory {
 
     @Override
     public Object eval(byte[] script, List<byte[]> keys, List<byte[]> args) {
-        return null;
+        return unifiedJedis.eval(script, keys, args);
     }
 
     @Override
     public void subscribe(RedisSubscriptionListener listener, byte[]... channel) {
-
+        JedisSubscription jedisSubscription = new JedisSubscription(listener);
+        this.subscription = jedisSubscription;
+        unifiedJedis.subscribe(jedisSubscription.getJedisPubSub(), channel);
     }
 
     @Override
     public RedisSubscription getSubscription() {
-        return null;
+        return subscription;
     }
 }
