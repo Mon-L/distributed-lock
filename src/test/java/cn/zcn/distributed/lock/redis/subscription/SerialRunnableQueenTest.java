@@ -1,9 +1,9 @@
 package cn.zcn.distributed.lock.redis.subscription;
 
 import cn.zcn.distributed.lock.subscription.SerialRunnableQueen;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.CountDownLatch;
 
@@ -11,7 +11,7 @@ public class SerialRunnableQueenTest {
 
     private SerialRunnableQueen queen;
 
-    @Before
+    @BeforeEach
     public void before() {
         queen = new SerialRunnableQueen();
     }
@@ -25,20 +25,20 @@ public class SerialRunnableQueenTest {
                 queen.runNext();
             });
         }
-        Assert.assertEquals(0, queen.getQueenSize());
-        Assert.assertEquals(10, count[0]);
+        Assertions.assertEquals(0, queen.getQueenSize());
+        Assertions.assertEquals(10, count[0]);
 
         queen.add(() -> count[0] += 1);
-        Assert.assertEquals(0, queen.getQueenSize());
-        Assert.assertEquals(11, count[0]);
+        Assertions.assertEquals(0, queen.getQueenSize());
+        Assertions.assertEquals(11, count[0]);
 
         queen.add(() -> count[0] += 1);
-        Assert.assertEquals(1, queen.getQueenSize());
-        Assert.assertEquals(11, count[0]);
+        Assertions.assertEquals(1, queen.getQueenSize());
+        Assertions.assertEquals(11, count[0]);
 
         queen.runNext();
-        Assert.assertEquals(0, queen.getQueenSize());
-        Assert.assertEquals(12, count[0]);
+        Assertions.assertEquals(0, queen.getQueenSize());
+        Assertions.assertEquals(12, count[0]);
     }
 
     @Test
@@ -47,22 +47,22 @@ public class SerialRunnableQueenTest {
         for (int i = 0; i < 10; i++) {
             queen.add(() -> count[0] += 1);
         }
-        Assert.assertEquals(9, queen.getQueenSize());
-        Assert.assertEquals(1, count[0]);
+        Assertions.assertEquals(9, queen.getQueenSize());
+        Assertions.assertEquals(1, count[0]);
 
         for (int i = 0; i < 9; i++) {
             queen.runNext();
         }
-        Assert.assertEquals(0, queen.getQueenSize());
-        Assert.assertEquals(10, count[0]);
+        Assertions.assertEquals(0, queen.getQueenSize());
+        Assertions.assertEquals(10, count[0]);
 
         queen.add(() -> count[0] += 1);
-        Assert.assertEquals(1, queen.getQueenSize());
-        Assert.assertEquals(10, count[0]);
+        Assertions.assertEquals(1, queen.getQueenSize());
+        Assertions.assertEquals(10, count[0]);
 
         queen.runNext();
-        Assert.assertEquals(0, queen.getQueenSize());
-        Assert.assertEquals(11, count[0]);
+        Assertions.assertEquals(0, queen.getQueenSize());
+        Assertions.assertEquals(11, count[0]);
     }
 
     @Test
@@ -85,19 +85,19 @@ public class SerialRunnableQueenTest {
         }).start();
 
         latch.await();
-        Assert.assertEquals(19, queen.getQueenSize());
-        Assert.assertEquals(1, count[0]);
+        Assertions.assertEquals(19, queen.getQueenSize());
+        Assertions.assertEquals(1, count[0]);
 
         for (int i = 0; i < 19; i++) {
             queen.runNext();
-            Assert.assertEquals(19 - i - 1, queen.getQueenSize());
+            Assertions.assertEquals(19 - i - 1, queen.getQueenSize());
         }
 
         queen.add(() -> count[0] += 1);
-        Assert.assertEquals(1, queen.getQueenSize());
-        Assert.assertEquals(20, count[0]);
+        Assertions.assertEquals(1, queen.getQueenSize());
+        Assertions.assertEquals(20, count[0]);
 
         queen.runNext();
-        Assert.assertEquals(0, queen.getQueenSize());
+        Assertions.assertEquals(0, queen.getQueenSize());
     }
 }

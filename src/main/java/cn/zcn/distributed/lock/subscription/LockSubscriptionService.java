@@ -6,7 +6,7 @@ public interface LockSubscriptionService {
 
     void start();
 
-    CompletableFuture<Void> subscribe(String channel, LockSubscriptionListener listener);
+    CompletableFuture<Void> subscribe(String channel, LockMessageListener listener);
 
     CompletableFuture<Void> unsubscribe(String channel);
 

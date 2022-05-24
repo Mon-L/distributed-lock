@@ -5,7 +5,7 @@ public class Config {
     /**
      * response timeout, millis
      */
-    private int timeout;
+    private int timeout = 5000;
 
     /**
      * 重连间隔

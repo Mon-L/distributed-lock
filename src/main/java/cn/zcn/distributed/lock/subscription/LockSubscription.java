@@ -45,7 +45,7 @@ public class LockSubscription {
                 return;
             }
 
-            LockSubscriptionListener listener = createListener(channel, newEntry);
+            LockMessageListener listener = createListener(channel, newEntry);
             CompletableFuture<?> subscriptionPromise = subscriptionService.subscribe(channel, listener);
             subscriptionPromise.whenComplete((r, t) -> newEntry.complete(t));
 
@@ -81,7 +81,7 @@ public class LockSubscription {
         });
     }
 
-    private LockSubscriptionListener createListener(String channelName, LockSubscriptionEntry lockSubscriptionEntry) {
+    private LockMessageListener createListener(String channelName, LockSubscriptionEntry lockSubscriptionEntry) {
         return (channel, message) -> {
             if (!channelName.equals(channel)) {
                 return;

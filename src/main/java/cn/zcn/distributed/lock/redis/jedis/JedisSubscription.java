@@ -11,7 +11,7 @@ public class JedisSubscription implements RedisSubscription {
 
     public JedisSubscription(RedisSubscriptionListener listener) {
         this.listener = listener;
-        this.pubSub = new ProxyPubsub();
+        this.pubSub = new JedisPubSubProxy();
     }
 
     public BinaryJedisPubSub getJedisPubSub() {
@@ -33,7 +33,7 @@ public class JedisSubscription implements RedisSubscription {
         pubSub.unsubscribe();
     }
 
-    private class ProxyPubsub extends BinaryJedisPubSub {
+    private class JedisPubSubProxy extends BinaryJedisPubSub {
 
         @Override
         public void onMessage(byte[] channel, byte[] message) {

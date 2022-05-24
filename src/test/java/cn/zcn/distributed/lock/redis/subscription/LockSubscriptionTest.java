@@ -3,9 +3,9 @@ package cn.zcn.distributed.lock.redis.subscription;
 import cn.zcn.distributed.lock.subscription.LockSubscription;
 import cn.zcn.distributed.lock.subscription.LockSubscriptionEntry;
 import cn.zcn.distributed.lock.subscription.LockSubscriptionService;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import java.util.ArrayList;
@@ -23,7 +23,7 @@ public class LockSubscriptionTest {
     private CompletableFuture<Void> unsubscriptionPromise;
     private LockSubscriptionService lockSubscriptionService;
 
-    @Before
+    @BeforeEach
     public void before() {
         subscriptionPromise = new CompletableFuture<>();
         unsubscriptionPromise = new CompletableFuture<>();
@@ -39,8 +39,8 @@ public class LockSubscriptionTest {
         CompletableFuture<LockSubscriptionEntry> promise = lockSubscription.subscribe(lockName);
         LockSubscriptionEntry entry = promise.get();
 
-        Assert.assertTrue(entry.getPromise().isDone());
-        Assert.assertEquals(1, entry.getCount());
+        Assertions.assertTrue(entry.getPromise().isDone());
+        Assertions.assertEquals(1, entry.getCount());
     }
 
     @Test
@@ -75,12 +75,12 @@ public class LockSubscriptionTest {
         }
 
         //判断 channel 订阅次数
-        Assert.assertEquals(threadNum * iterations, entry.getCount());
+        Assertions.assertEquals(threadNum * iterations, entry.getCount());
         Mockito.verify(lockSubscriptionService, Mockito.times(1)).subscribe(Mockito.anyString(), Mockito.any());
 
         promises.forEach(f -> {
-            Assert.assertTrue(f.isDone());
-            Assert.assertFalse(f.isCompletedExceptionally());
+            Assertions.assertTrue(f.isDone());
+            Assertions.assertFalse(f.isCompletedExceptionally());
         });
     }
 
@@ -121,13 +121,13 @@ public class LockSubscriptionTest {
         }
 
         //判断 channel 订阅次数
-        Assert.assertEquals(threadNum * iterations, entry.getCount());
+        Assertions.assertEquals(threadNum * iterations, entry.getCount());
         Mockito.verify(lockSubscriptionService, Mockito.times(1)).subscribe(Mockito.anyString(), Mockito.any());
 
         //剩下的订阅都成功
         promises.forEach(f -> {
-            Assert.assertTrue(f.isDone());
-            Assert.assertFalse(f.isCompletedExceptionally());
+            Assertions.assertTrue(f.isDone());
+            Assertions.assertFalse(f.isCompletedExceptionally());
         });
 
         //取消所有订阅
@@ -138,7 +138,7 @@ public class LockSubscriptionTest {
 
         //只取消订阅 channel 一次
         Mockito.verify(lockSubscriptionService, Mockito.times(1)).unsubscribe(Mockito.any());
-        Assert.assertEquals(0, entry.getCount());
+        Assertions.assertEquals(0, entry.getCount());
     }
 
     private void asyncRun(int threadNum, Runnable runnable) {

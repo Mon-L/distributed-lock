@@ -1,7 +1,7 @@
 package cn.zcn.distributed.lock.redis;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 import redis.clients.jedis.BinaryJedisPubSub;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
@@ -15,7 +15,7 @@ public class RedisTest {
 
     private JedisPool jedisPool;
 
-    @Before
+    @BeforeAll
     public void before() {
         jedisPool = new JedisPool("127.0.0.1", 6379, null, "123456");
     }
@@ -66,9 +66,9 @@ public class RedisTest {
         new Thread(new Runnable() {
             @Override
             public void run() {
-                jedisPubSub.subscribe(new byte[0]);
+                jedis.subscribe(jedisPubSub, null);
             }
-        });
+        }).start();
 
         Thread.sleep(100000);
     }
