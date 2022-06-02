@@ -4,7 +4,6 @@ import cn.zcn.distributed.lock.redis.RedisCommandFactory;
 import cn.zcn.distributed.lock.redis.RedisDistributedLockCreator;
 import cn.zcn.distributed.lock.redis.jedis.JedisPoolCommandFactory;
 import cn.zcn.distributed.lock.redis.jedis.UnifiedJedisCommandFactory;
-import com.sun.tools.javac.util.Assert;
 import redis.clients.jedis.JedisCluster;
 import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.JedisSentinelPool;
@@ -39,7 +38,9 @@ class JedisDistributedLockClientBuilder implements DistributedLockClientBuilder 
 
     @Override
     public DistributedLockClient build() {
-        Assert.checkNonNull(redisCommandFactory, "Must config jedis instance.");
+        if (redisCommandFactory == null) {
+            throw new IllegalStateException("Must config lettuce instance.");
+        }
 
         RedisDistributedLockCreator redisDistributedLockCreator = new RedisDistributedLockCreator(config, redisCommandFactory);
         redisDistributedLockCreator.start();

@@ -4,7 +4,6 @@ import cn.zcn.distributed.lock.redis.RedisCommandFactory;
 import cn.zcn.distributed.lock.redis.RedisDistributedLockCreator;
 import cn.zcn.distributed.lock.redis.lettuce.LettuceClusterCommandFactory;
 import cn.zcn.distributed.lock.redis.lettuce.LettuceCommandFactory;
-import com.sun.tools.javac.util.Assert;
 import io.lettuce.core.RedisClient;
 import io.lettuce.core.cluster.RedisClusterClient;
 
@@ -33,7 +32,9 @@ class LettuceDistributedLockClientBuilder implements DistributedLockClientBuilde
 
     @Override
     public DistributedLockClient build() {
-        Assert.checkNonNull(redisCommandFactory, "Must config lettuce instance.");
+        if (redisCommandFactory == null) {
+            throw new IllegalStateException("Must config lettuce instance.");
+        }
 
         RedisDistributedLockCreator redisDistributedLockCreator = new RedisDistributedLockCreator(config, redisCommandFactory);
         redisDistributedLockCreator.start();
