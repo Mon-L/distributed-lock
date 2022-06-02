@@ -6,15 +6,18 @@
 
     <groupId>cn.zcn</groupId>
     <artifactId>distributed-lock</artifactId>
-    <version>0.1</version>
+    <version>0.0.1</version>
 
     <properties>
         <maven.compiler.source>8</maven.compiler.source>
         <maven.compiler.target>8</maven.compiler.target>
+        <junit.version>5.8.2</junit.version>
+        <mockito.version>4.0.0</mockito.version>
+        <snakeyaml.version>1.29</snakeyaml.version>
         <netty.version>4.1.77.Final</netty.version>
-        <jedis.version>4.2.2</jedis.version>
-        <zookeeper.version>3.8.0</zookeeper.version>
-        <lettuce.version>5.2.2.RELEASE</lettuce.version>
+        <jedis.version>[4.2.2,)</jedis.version>
+        <lettuce.version>[5.2.2.RELEASE,)</lettuce.version>
+        <zookeeper.version>[3.8.0,)</zookeeper.version>
     </properties>
 
     <dependencyManagement>
@@ -22,7 +25,7 @@
             <dependency>
                 <groupId>org.junit</groupId>
                 <artifactId>junit-bom</artifactId>
-                <version>5.8.2</version>
+                <version>${junit.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -39,7 +42,14 @@
         <dependency>
             <groupId>org.mockito</groupId>
             <artifactId>mockito-core</artifactId>
-            <version>4.0.0</version>
+            <version>${mockito.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.yaml</groupId>
+            <artifactId>snakeyaml</artifactId>
+            <version>${snakeyaml.version}</version>
             <scope>test</scope>
         </dependency>
 
@@ -53,21 +63,21 @@
             <groupId>redis.clients</groupId>
             <artifactId>jedis</artifactId>
             <version>${jedis.version}</version>
-            <scope>compile</scope>
+            <scope>provided</scope>
         </dependency>
 
         <dependency>
             <groupId>io.lettuce</groupId>
             <artifactId>lettuce-core</artifactId>
-            <version>5.2.2.RELEASE</version>
-            <scope>compile</scope>
+            <version>${lettuce.version}</version>
+            <scope>provided</scope>
         </dependency>
 
         <dependency>
             <groupId>org.apache.zookeeper</groupId>
             <artifactId>zookeeper</artifactId>
             <version>${zookeeper.version}</version>
-            <scope>compile</scope>
+            <scope>provided</scope>
         </dependency>
 
     </dependencies>

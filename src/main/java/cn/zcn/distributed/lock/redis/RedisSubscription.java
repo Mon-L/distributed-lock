@@ -16,6 +16,8 @@ public interface RedisSubscription {
      */
     void unsubscribe(byte[]... channels);
 
+    long getSubscribedChannels();
+
     /**
      * 关闭并取消所有订阅
      */

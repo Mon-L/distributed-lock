@@ -1,15 +1,14 @@
 package cn.zcn.distributed.lock;
 
-import cn.zcn.distributed.lock.exception.LockException;
 import cn.zcn.distributed.lock.subscription.LockSubscription;
 import cn.zcn.distributed.lock.subscription.LockSubscriptionEntry;
 import io.netty.util.Timeout;
 import io.netty.util.Timer;
+import io.netty.util.TimerTask;
 
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.Map;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * 分布式锁的结构
@@ -17,25 +16,49 @@ import java.util.concurrent.TimeoutException;
  * {UUID}:{thread id} = {lock count}
  * }
  */
-public abstract class BaseZLock implements ZLock {
+public abstract class AbstractLock implements Lock {
 
-    private final static String LOCK_PREFIX = "-lock-";
+    private static class RenewEntry {
+        private final long threadId;
+        private final AtomicLong count = new AtomicLong(0);
+        private volatile Timeout timeout;
+
+        private RenewEntry(long threadId) {
+            this.threadId = threadId;
+        }
+
+        private void increase() {
+            count.incrementAndGet();
+        }
+
+        private long decrease() {
+            return count.decrementAndGet();
+        }
+
+        private void setTimeout(Timeout timeout) {
+            this.timeout = timeout;
+        }
+
+        private Timeout getTimeout() {
+            return timeout;
+        }
+    }
+
+    private static final Map<String, RenewEntry> renewEntries = new ConcurrentHashMap<>();
 
     protected final String lockName;
     protected final String instanceId;
-
+    private final static String LOCK_PREFIX = "-lock-";
     private final Timer timer;
     private final LockSubscription lockSubscription;
     private final Config config;
-    private Timeout renewTimeout;
-
 
     /**
      * @param lock       分布式锁的名称
      * @param instanceId UUID
      * @param timer      定时器
      */
-    public BaseZLock(String lock, String instanceId, Timer timer, Config config, LockSubscription lockSubscription) {
+    public AbstractLock(String lock, String instanceId, Timer timer, Config config, LockSubscription lockSubscription) {
         this.lockName = LOCK_PREFIX + lock;
         this.instanceId = instanceId;
         this.timer = timer;
@@ -53,10 +76,10 @@ public abstract class BaseZLock implements ZLock {
 
     @Override
     public void lock(long duration, TimeUnit durationTimeUnit) throws InterruptedException {
-        String lockEntryName = getLockEntry();
+        long threadId = Thread.currentThread().getId();
         long durationMillis = durationTimeUnit.toMillis(duration);
 
-        Long ttl = innerLock(durationMillis, lockEntryName);
+        Long ttl = innerLock(durationMillis, threadId);
         if (ttl == null) {
             //获取锁成功
             return;
@@ -81,7 +104,7 @@ public abstract class BaseZLock implements ZLock {
         try {
             while (true) {
                 //尝试获取锁
-                ttl = innerLock(durationMillis, lockEntryName);
+                ttl = innerLock(durationMillis, threadId);
                 if (ttl == null) {
                     //获取锁成功
                     return;
@@ -102,12 +125,12 @@ public abstract class BaseZLock implements ZLock {
 
     @Override
     public boolean tryLock(long waitTime, TimeUnit waitTimeUnit, long duration, TimeUnit durationTimeUnit) throws InterruptedException {
-        String lockEntryName = getLockEntry();
-        long startMillis = System.currentTimeMillis(),
+        long threadId = Thread.currentThread().getId(),
+                startMillis = System.currentTimeMillis(),
                 waitTimeMillis = waitTimeUnit.toMillis(waitTime),
                 durationMillis = durationTimeUnit.toMillis(duration);
 
-        Long ttl = innerLock(durationMillis, lockEntryName);
+        Long ttl = innerLock(durationMillis, threadId);
         if (ttl == null) {
             //获取锁成功
             return true;
@@ -143,7 +166,7 @@ public abstract class BaseZLock implements ZLock {
                 }
 
                 //尝试获取锁
-                ttl = innerLock(durationMillis, lockEntryName);
+                ttl = innerLock(durationMillis, threadId);
                 if (ttl == null) {
                     //获取锁成功
                     return true;
@@ -165,49 +188,70 @@ public abstract class BaseZLock implements ZLock {
         }
     }
 
-    private Long innerLock(long durationMillis, String lockEntryName) {
-        Long ttl = doLock(durationMillis, lockEntryName);
-        setRenewTimer(ttl, lockEntryName);
+    private Long innerLock(long durationMillis, long threadId) {
+        Long ttl = doLock(durationMillis, threadId);
+        if (ttl == null) {
+            startRenewTimer(durationMillis, threadId);
+        }
         return ttl;
     }
 
-    private void setRenewTimer(long durationMillis, String lockEntryName) {
-        this.renewTimeout = timer.newTimeout(t -> {
-            if (t.isCancelled()) {
-                return;
-            }
+    private void startRenewTimer(long durationMillis, long threadId) {
+        RenewEntry renewEntry = new RenewEntry(threadId);
+        RenewEntry oldEntry = renewEntries.putIfAbsent(lockName, renewEntry);
 
-            long ttl = doRenew(lockEntryName);
-            if (ttl > 0) {
-                setRenewTimer(ttl, lockEntryName);
-            } else {
-                t.cancel();
-            }
-        }, durationMillis / 3, TimeUnit.MILLISECONDS);
+        if (oldEntry != null) {
+            oldEntry.increase();
+        } else {
+            renewEntry.increase();
+            setTimeout(renewEntry, durationMillis, threadId);
+        }
     }
 
-    @Override
-    public void unlock() {
-        if (isHeldByCurrentThread()) {
-            if (!renewTimeout.isCancelled()) {
-                renewTimeout.cancel();
+    private void setTimeout(RenewEntry e, long durationMillis, long threadId) {
+        Timeout timeout = timer.newTimeout(new TimerTask() {
+            @Override
+            public void run(Timeout timeout) {
+                boolean ret = doRenew(durationMillis, threadId);
+                if (ret) {
+                    setTimeout(e, durationMillis, threadId);
+                } else {
+                    clearTimeout(true);
+                }
             }
-            doUnLock(getLockEntry());
+        }, durationMillis / 3, TimeUnit.MILLISECONDS);
+
+        e.setTimeout(timeout);
+    }
+
+    private void clearTimeout(boolean force) {
+        RenewEntry entry = renewEntries.get(lockName);
+        if (entry != null) {
+            long count = entry.decrease();
+
+            if (force || count == 0) {
+                renewEntries.remove(lockName);
+                Timeout timeout = entry.getTimeout();
+                if (!timeout.isCancelled()) {
+                    timeout.cancel();
+                }
+            }
         }
     }
 
     @Override
-    public void renew() {
-        if (isHeldByCurrentThread()) {
-            doRenew(getLockEntry());
+    public void unlock() {
+        boolean ret = doUnLock(Thread.currentThread().getId());
+        if (ret) {
+            clearTimeout(false);
         }
     }
 
     /**
      * e.g. 5b978978-ed05-4715-b9b0-bc0217278329:78
      */
-    protected String getLockEntry() {
-        return instanceId + ":" + Thread.currentThread().getId();
+    protected String getLockEntry(long threadId) {
+        return instanceId + ":" + threadId;
     }
 
     /**
@@ -221,17 +265,17 @@ public abstract class BaseZLock implements ZLock {
      *
      * @return null, 获取锁成功； >= 0, 获取锁失败，返回锁的过期时间； < 0， 锁申请失败，但锁已过期。
      */
-    protected abstract Long doLock(long durationMillis, String entry);
+    protected abstract Long doLock(long durationMillis, long threadId);
 
     /**
      * 续锁
      *
-     * @return >= 0, 续锁成功，返回锁的过期时间； == 0， 续锁失败
+     * @return true, 续锁成功； false， 续锁失败
      */
-    protected abstract long doRenew(String entry);
+    protected abstract boolean doRenew(long durationMillis, long threadId);
 
     /**
      * 释放锁
      */
-    protected abstract void doUnLock(String entry);
+    protected abstract boolean doUnLock(long threadId);
 }

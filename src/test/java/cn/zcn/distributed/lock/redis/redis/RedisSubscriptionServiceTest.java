@@ -2,169 +2,86 @@ package cn.zcn.distributed.lock.redis.redis;
 
 import cn.zcn.distributed.lock.Config;
 import cn.zcn.distributed.lock.redis.RedisCommandFactory;
-import cn.zcn.distributed.lock.redis.RedisSubscription;
-import cn.zcn.distributed.lock.redis.RedisSubscriptionListener;
 import cn.zcn.distributed.lock.redis.RedisSubscriptionService;
+import cn.zcn.distributed.lock.redis.test.redis.RedisCommandFactoryExtensions;
 import cn.zcn.distributed.lock.subscription.LockMessageListener;
 import io.netty.util.HashedWheelTimer;
+import io.netty.util.Timer;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class RedisSubscriptionServiceTest {
 
+    static RedisCommandFactory[] testParams() {
+        return new RedisCommandFactory[]{
+                RedisCommandFactoryExtensions.lettuceCommandFactory
+        };
+    }
+
     private final String lock = "lock";
-    private final byte[] lockBytes = lock.getBytes(StandardCharsets.UTF_8);
-    private RedisSubscriptionService redisSubscriptionService;
-    private MockBlockedRedisCommandFactory redisCommandFactory;
-    private MockRedisSubscription redisSubscription;
+    private Config config;
+    private Timer timer;
+    private LockMessageListener listener;
 
     @BeforeEach
-    public void beforeEach() {
-        Config config = new Config();
-
-        redisCommandFactory = spy(new MockBlockedRedisCommandFactory());
-        redisSubscription = redisCommandFactory.getMockSubscription();
-        redisSubscriptionService = spy(new RedisSubscriptionService(config, redisCommandFactory, new HashedWheelTimer()));
-        redisSubscriptionService.start();
+    void beforeEach() {
+        config = Config.DEFAULT_CONFIG;
+        timer = new HashedWheelTimer();
+        listener = (channel, message) -> {
+        };
     }
 
-    @Test
-    public void testSubscribeThenSuccess() {
-        CompletableFuture<Void> promise = redisSubscriptionService.subscribe(lock, new NoopMessageListener());
+    @ParameterizedTest
+    @MethodSource("testParams")
+    void testSubscribe(RedisCommandFactory commandFactory) throws InterruptedException {
+        RedisSubscriptionService subscriptionService = new RedisSubscriptionService(config, commandFactory, timer);
+        subscriptionService.start();
 
-        promise.join();
+        CompletableFuture<Void> promise = subscriptionService.subscribe(lock, listener);
+        TimeUnit.SECONDS.sleep(1);
+
         assertTrue(promise.isDone());
         assertFalse(promise.isCompletedExceptionally());
-        verify(redisCommandFactory, times(1)).subscribe(any(), eq(lockBytes));
-        verify(redisSubscription, times(0)).subscribe(lockBytes);
+        assertEquals(1, subscriptionService.getSubscribedChannels());
+        assertEquals(1, subscriptionService.getSubscribedListeners());
+
+        subscriptionService.stop();
     }
 
-    @Test
-    public void testUnsubscribeThenSuccess() {
-        testSubscribeThenSuccess();
-        redisSubscriptionService.unsubscribe("lock");
 
-        verify(redisSubscription, times(1)).unsubscribe(lockBytes);
+    @ParameterizedTest
+    @MethodSource("testParams")
+    void testUnsubscribe(RedisCommandFactory commandFactory) throws InterruptedException {
+        RedisSubscriptionService subscriptionService = new RedisSubscriptionService(config, commandFactory, timer);
+        subscriptionService.start();
+
+        subscriptionService.subscribe(lock, listener);
+        TimeUnit.SECONDS.sleep(1);
+        assertEquals(1, subscriptionService.getSubscribedChannels());
+
+        subscriptionService.unsubscribe(lock);
+        TimeUnit.SECONDS.sleep(1);
+        assertEquals(0, subscriptionService.getSubscribedChannels());
     }
 
-    @Test
-    public void testClose() {
-        redisSubscriptionService.stop();
-        verify(redisSubscription, times(1)).close();
-    }
+    @ParameterizedTest
+    @MethodSource("testParams")
+    void testStop(RedisCommandFactory commandFactory) throws InterruptedException {
+        RedisSubscriptionService subscriptionService = new RedisSubscriptionService(config, commandFactory, timer);
+        subscriptionService.start();
 
-    private static class NoopMessageListener implements LockMessageListener {
-        @Override
-        public void onMessage(String channel, Object message) {
-        }
-    }
+        subscriptionService.subscribe(lock, listener);
+        assertEquals(1, subscriptionService.getSubscribedChannels());
 
-    private static class MockBlockedRedisCommandFactory implements RedisCommandFactory {
+        subscriptionService.stop();
+        TimeUnit.SECONDS.sleep(1);
 
-        private final MockRedisSubscription redisSubscription = spy(new MockRedisSubscription());
-
-        @Override
-        public Object eval(byte[] script, List<byte[]> keys, List<byte[]> args) {
-            return null;
-        }
-
-        @Override
-        public void subscribe(RedisSubscriptionListener listener, byte[]... channels) {
-            redisSubscription.subscribe(listener, channels);
-
-            try {
-                redisSubscription.acquire();
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }
-
-        @Override
-        public RedisSubscription getSubscription() {
-            return redisSubscription;
-        }
-
-        public MockRedisSubscription getMockSubscription() {
-            return redisSubscription;
-        }
-    }
-
-    private static class MockRedisSubscription implements RedisSubscription {
-
-        private final int executeDelayedMillis = 300;
-        private final Semaphore semaphore = new Semaphore(0);
-        private final List<String> subscribeChannels = new ArrayList<>();
-        private RedisSubscriptionListener subscriptionListener;
-
-        public void subscribe(RedisSubscriptionListener listener, byte[]... channels) {
-            this.subscriptionListener = listener;
-            asyncExecute(() -> {
-                for (byte[] channel : channels) {
-                    subscribeChannels.add(new String(channel));
-                    subscriptionListener.onSubscribe(channel, subscribeChannels.size());
-                }
-            });
-        }
-
-        @Override
-        public void subscribe(byte[]... channels) {
-            asyncExecute(() -> {
-                for (byte[] channel : channels) {
-                    subscribeChannels.add(new String(channel));
-                    subscriptionListener.onSubscribe(channel, subscribeChannels.size());
-                }
-            });
-        }
-
-        @Override
-        public void unsubscribe(byte[]... channels) {
-            asyncExecute(() -> {
-                for (byte[] channel : channels) {
-                    subscribeChannels.remove(new String(channel));
-                    subscriptionListener.onUnsubscribe(channel, subscribeChannels.size());
-                    releaseIfNeed();
-                }
-            });
-        }
-
-        private void releaseIfNeed() {
-            if (subscribeChannels.isEmpty()) {
-                semaphore.release();
-            }
-        }
-
-        public void acquire() throws InterruptedException {
-            semaphore.acquire();
-        }
-
-        @Override
-        public void close() {
-            asyncExecute(() -> {
-                subscribeChannels.clear();
-                releaseIfNeed();
-            });
-        }
-
-        private void asyncExecute(Runnable runnable) {
-            CompletableFuture.runAsync(() -> {
-                try {
-                    Thread.sleep(executeDelayedMillis);
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-
-                runnable.run();
-            });
-        }
+        assertEquals(0, subscriptionService.getSubscribedChannels());
     }
 }

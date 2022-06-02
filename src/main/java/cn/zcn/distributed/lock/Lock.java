@@ -2,7 +2,7 @@ package cn.zcn.distributed.lock;
 
 import java.util.concurrent.TimeUnit;
 
-public interface ZLock {
+public interface Lock {
 
     /**
      * 申请一个锁，锁的持续时间为 {@code duration}。阻塞当前线程，直到锁申请成功，可被中断
@@ -29,11 +29,6 @@ public interface ZLock {
      * 释放获得的锁
      */
     void unlock();
-
-    /**
-     * 续锁
-     */
-    void renew();
 
     /**
      * 判断锁是否被当前线程持有

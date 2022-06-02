@@ -4,7 +4,7 @@ import cn.zcn.distributed.lock.redis.RedisSubscription;
 import cn.zcn.distributed.lock.redis.RedisSubscriptionListener;
 import redis.clients.jedis.BinaryJedisPubSub;
 
-public class JedisSubscription implements RedisSubscription {
+class JedisSubscription implements RedisSubscription {
 
     private final BinaryJedisPubSub pubSub;
     private final RedisSubscriptionListener listener;
@@ -26,6 +26,11 @@ public class JedisSubscription implements RedisSubscription {
     @Override
     public void unsubscribe(byte[]... channel) {
         pubSub.unsubscribe(channel);
+    }
+
+    @Override
+    public long getSubscribedChannels() {
+        return pubSub.getSubscribedChannels();
     }
 
     @Override

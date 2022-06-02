@@ -28,4 +28,6 @@ public interface RedisCommandFactory {
      * @return null, 没有任何订阅
      */
     RedisSubscription getSubscription();
+
+    void stop();
 }

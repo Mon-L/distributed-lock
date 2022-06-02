@@ -4,25 +4,25 @@ import cn.zcn.distributed.lock.LockException;
 import cn.zcn.distributed.lock.redis.RedisCommandFactory;
 import cn.zcn.distributed.lock.redis.RedisSubscription;
 import cn.zcn.distributed.lock.redis.RedisSubscriptionListener;
-import io.lettuce.core.RedisClient;
 import io.lettuce.core.ScriptOutputType;
-import io.lettuce.core.api.StatefulRedisConnection;
-import io.lettuce.core.api.sync.RedisCommands;
+import io.lettuce.core.cluster.RedisClusterClient;
+import io.lettuce.core.cluster.api.StatefulRedisClusterConnection;
+import io.lettuce.core.cluster.api.sync.RedisAdvancedClusterCommands;
 import io.lettuce.core.codec.ByteArrayCodec;
 
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class LettuceCommandFactory implements RedisCommandFactory {
+public class LettuceClusterCommandFactory implements RedisCommandFactory {
 
-    private final RedisClient redisClient;
-    private final StatefulRedisConnection<byte[], byte[]> conn;
-    private final RedisCommands<byte[], byte[]> commands;
+    private final RedisClusterClient redisClient;
+    private final StatefulRedisClusterConnection<byte[], byte[]> conn;
+    private final RedisAdvancedClusterCommands<byte[], byte[]> commands;
     private final AtomicBoolean isSubscribed = new AtomicBoolean(false);
 
     private RedisSubscription redisSubscription;
 
-    public LettuceCommandFactory(RedisClient redisClient) {
+    public LettuceClusterCommandFactory(RedisClusterClient redisClient) {
         this.redisClient = redisClient;
         this.conn = redisClient.connect(ByteArrayCodec.INSTANCE);
         this.commands = this.conn.sync();

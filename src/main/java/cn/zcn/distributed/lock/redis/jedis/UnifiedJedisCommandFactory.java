@@ -1,6 +1,6 @@
 package cn.zcn.distributed.lock.redis.jedis;
 
-import cn.zcn.distributed.lock.exception.LockException;
+import cn.zcn.distributed.lock.LockException;
 import cn.zcn.distributed.lock.redis.RedisCommandFactory;
 import cn.zcn.distributed.lock.redis.RedisSubscription;
 import cn.zcn.distributed.lock.redis.RedisSubscriptionListener;
@@ -31,8 +31,11 @@ public class UnifiedJedisCommandFactory implements RedisCommandFactory {
                 JedisSubscription jedisSubscription = new JedisSubscription(listener);
                 this.subscription = jedisSubscription;
                 unifiedJedis.subscribe(jedisSubscription.getJedisPubSub(), channel);
+            } catch (Exception e) {
+                throw new LockException("Failed to Subscribe channel.", e);
             } finally {
                 this.subscription = null;
+                this.isSubscribed.set(false);
             }
         } else {
             throw new LockException("Already subscribe redis channel.");
@@ -42,5 +45,14 @@ public class UnifiedJedisCommandFactory implements RedisCommandFactory {
     @Override
     public RedisSubscription getSubscription() {
         return subscription;
+    }
+
+    @Override
+    public void stop() {
+        if (subscription != null) {
+            subscription.close();
+        }
+
+        unifiedJedis.close();
     }
 }

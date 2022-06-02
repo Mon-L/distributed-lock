@@ -1,22 +1,23 @@
 package cn.zcn.distributed.lock.redis.jedis;
 
-import cn.zcn.distributed.lock.exception.LockException;
+import cn.zcn.distributed.lock.LockException;
 import cn.zcn.distributed.lock.redis.RedisCommandFactory;
 import cn.zcn.distributed.lock.redis.RedisSubscription;
 import cn.zcn.distributed.lock.redis.RedisSubscriptionListener;
 import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
+import redis.clients.jedis.util.Pool;
 
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class JedisPoolCommandFactory implements RedisCommandFactory {
 
-    private final JedisPool jedisPool;
+    private final Pool<Jedis> jedisPool;
     private final AtomicBoolean isSubscribed = new AtomicBoolean(false);
+
     private RedisSubscription subscription;
 
-    public JedisPoolCommandFactory(JedisPool jedisPool) {
+    public JedisPoolCommandFactory(Pool<Jedis> jedisPool) {
         this.jedisPool = jedisPool;
     }
 
@@ -30,26 +31,32 @@ public class JedisPoolCommandFactory implements RedisCommandFactory {
     @Override
     public void subscribe(RedisSubscriptionListener listener, byte[]... channel) {
         if (isSubscribed.compareAndSet(false, true)) {
-            Jedis jedis = null;
-            try {
-                jedis = jedisPool.getResource();
+            try (Jedis jedis = jedisPool.getResource()) {
                 JedisSubscription jedisSubscription = new JedisSubscription(listener);
-                this.subscription = jedisSubscription;
+                subscription = jedisSubscription;
                 jedis.subscribe(jedisSubscription.getJedisPubSub(), channel);
+            } catch (Exception e) {
+                throw new LockException("Failed to subscribe channel.", e);
             } finally {
-                if (jedis != null) {
-                    jedis.close();
-                    this.subscription = null;
-                }
+                subscription = null;
                 isSubscribed.set(false);
             }
         } else {
-            throw new LockException("Already subscribe redis channel.");
+            throw new LockException("Already subscribed; use the subscription to cancel or add new channels");
         }
     }
 
     @Override
     public RedisSubscription getSubscription() {
         return subscription;
+    }
+
+    @Override
+    public void stop() {
+        if (subscription != null) {
+            subscription.close();
+        }
+
+        jedisPool.close();
     }
 }

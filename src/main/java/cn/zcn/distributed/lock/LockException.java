@@ -1,4 +1,4 @@
-package cn.zcn.distributed.lock.exception;
+package cn.zcn.distributed.lock;
 
 public class LockException extends RuntimeException {
     
