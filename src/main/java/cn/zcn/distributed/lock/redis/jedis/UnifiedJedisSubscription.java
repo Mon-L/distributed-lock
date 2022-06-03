@@ -3,17 +3,16 @@ package cn.zcn.distributed.lock.redis.jedis;
 import cn.zcn.distributed.lock.redis.RedisSubscription;
 import cn.zcn.distributed.lock.redis.RedisSubscriptionListener;
 import redis.clients.jedis.BinaryJedisPubSub;
-import redis.clients.jedis.Jedis;
+import redis.clients.jedis.UnifiedJedis;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
-class JedisSubscription implements RedisSubscription {
-
-    private final Jedis jedis;
+public class UnifiedJedisSubscription implements RedisSubscription {
+    private final UnifiedJedis jedis;
     private final AtomicBoolean isSubscribed = new AtomicBoolean(false);
     private BinaryJedisPubSub pubSub;
 
-    JedisSubscription(Jedis jedis) {
+    UnifiedJedisSubscription(UnifiedJedis jedis) {
         this.jedis = jedis;
     }
 
@@ -32,13 +31,13 @@ class JedisSubscription implements RedisSubscription {
     }
 
     @Override
-    public void subscribe(byte[]... channel) {
-        pubSub.subscribe(channel);
+    public void subscribe(byte[]... channels) {
+        pubSub.subscribe(channels);
     }
 
     @Override
-    public void unsubscribe(byte[]... channel) {
-        pubSub.unsubscribe(channel);
+    public void unsubscribe(byte[]... channels) {
+        pubSub.unsubscribe(channels);
     }
 
     @Override
@@ -53,12 +52,8 @@ class JedisSubscription implements RedisSubscription {
 
     @Override
     public void close() {
-        if (jedis.isConnected()) {
-            if (isAlive()) {
-                pubSub.unsubscribe();
-            }
-
-            jedis.close();
+        if (isAlive()) {
+            pubSub.unsubscribe();
         }
     }
 }

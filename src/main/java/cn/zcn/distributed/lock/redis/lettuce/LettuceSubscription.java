@@ -8,15 +8,21 @@ import io.lettuce.core.pubsub.api.sync.RedisPubSubCommands;
 
 class LettuceSubscription implements RedisSubscription {
 
-    private final LettucePubSubListener lettucePubSubListener;
+    private LettucePubSubAdapter lettucePubSubAdapter;
     private final RedisPubSubCommands<byte[], byte[]> pubSubCommands;
     private final StatefulRedisPubSubConnection<byte[], byte[]> connection;
 
-    public LettuceSubscription(StatefulRedisPubSubConnection<byte[], byte[]> connection, RedisSubscriptionListener listener) {
+    public LettuceSubscription(StatefulRedisPubSubConnection<byte[], byte[]> connection) {
         this.connection = connection;
-        this.lettucePubSubListener = new LettucePubSubListener(listener);
-        this.connection.addListener(lettucePubSubListener);
         this.pubSubCommands = this.connection.sync();
+    }
+
+    @Override
+    public void subscribe(RedisSubscriptionListener listener, byte[]... channels) {
+        this.lettucePubSubAdapter = new LettucePubSubAdapter(listener);
+        this.connection.addListener(lettucePubSubAdapter);
+
+        subscribe(channels);
     }
 
     @Override
@@ -31,22 +37,29 @@ class LettuceSubscription implements RedisSubscription {
 
     @Override
     public long getSubscribedChannels() {
-        return lettucePubSubListener.subscribedChannels;
+        return isAlive() ? lettucePubSubAdapter.subscribedChannels : 0;
+    }
+
+    @Override
+    public boolean isAlive() {
+        return connection.isOpen();
     }
 
     @Override
     public void close() {
-        pubSubCommands.unsubscribe();
-        connection.removeListener(lettucePubSubListener);
-        connection.close();
+        if (isAlive()) {
+            pubSubCommands.unsubscribe();
+            connection.removeListener(lettucePubSubAdapter);
+            connection.close();
+        }
     }
 
-    private static class LettucePubSubListener extends RedisPubSubAdapter<byte[], byte[]> {
+    private static class LettucePubSubAdapter extends RedisPubSubAdapter<byte[], byte[]> {
 
         private volatile long subscribedChannels;
         private final RedisSubscriptionListener listener;
 
-        private LettucePubSubListener(RedisSubscriptionListener listener) {
+        private LettucePubSubAdapter(RedisSubscriptionListener listener) {
             this.listener = listener;
         }
 

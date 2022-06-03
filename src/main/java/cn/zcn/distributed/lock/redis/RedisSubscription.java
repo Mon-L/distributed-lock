@@ -7,6 +7,13 @@ public interface RedisSubscription {
      *
      * @param channels 待订阅待channels
      */
+    void subscribe(RedisSubscriptionListener listener, byte[]... channels);
+
+    /**
+     * 订阅channel
+     *
+     * @param channels 待订阅待channels
+     */
     void subscribe(byte[]... channels);
 
     /**
@@ -17,6 +24,8 @@ public interface RedisSubscription {
     void unsubscribe(byte[]... channels);
 
     long getSubscribedChannels();
+
+    boolean isAlive();
 
     /**
      * 关闭并取消所有订阅

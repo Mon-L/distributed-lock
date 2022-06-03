@@ -39,10 +39,10 @@ class JedisDistributedLockClientBuilder implements DistributedLockClientBuilder 
     @Override
     public DistributedLockClient build() {
         if (redisCommandFactory == null) {
-            throw new IllegalStateException("Must config lettuce instance.");
+            throw new IllegalStateException("Must config jedis instance.");
         }
 
-        RedisDistributedLockCreator redisDistributedLockCreator = new RedisDistributedLockCreator(config, redisCommandFactory);
+        RedisDistributedLockCreator redisDistributedLockCreator = new RedisDistributedLockCreator(config, redisCommandFactory, true);
         redisDistributedLockCreator.start();
 
         return new DistributedLockClient(redisDistributedLockCreator);

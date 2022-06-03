@@ -1,9 +1,7 @@
 package cn.zcn.distributed.lock.redis.lettuce;
 
-import cn.zcn.distributed.lock.LockException;
 import cn.zcn.distributed.lock.redis.RedisCommandFactory;
 import cn.zcn.distributed.lock.redis.RedisSubscription;
-import cn.zcn.distributed.lock.redis.RedisSubscriptionListener;
 import io.lettuce.core.RedisClient;
 import io.lettuce.core.ScriptOutputType;
 import io.lettuce.core.api.StatefulRedisConnection;
@@ -11,16 +9,12 @@ import io.lettuce.core.api.sync.RedisCommands;
 import io.lettuce.core.codec.ByteArrayCodec;
 
 import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 public class LettuceCommandFactory implements RedisCommandFactory {
 
     private final RedisClient redisClient;
     private final StatefulRedisConnection<byte[], byte[]> conn;
     private final RedisCommands<byte[], byte[]> commands;
-    private final AtomicBoolean isSubscribed = new AtomicBoolean(false);
-
-    private RedisSubscription redisSubscription;
 
     public LettuceCommandFactory(RedisClient redisClient) {
         this.redisClient = redisClient;
@@ -34,31 +28,12 @@ public class LettuceCommandFactory implements RedisCommandFactory {
     }
 
     @Override
-    public void subscribe(RedisSubscriptionListener listener, byte[]... channel) {
-        if (isSubscribed.compareAndSet(false, true)) {
-            try {
-                redisSubscription = new LettuceSubscription(redisClient.connectPubSub(ByteArrayCodec.INSTANCE), listener);
-            } catch (Exception e) {
-                redisSubscription = null;
-                isSubscribed.set(false);
-                throw new LockException("Failed to Subscribe channel.", e);
-            }
-        } else {
-            throw new LockException("Already subscribed; use the subscription to cancel or add new channels");
-        }
-    }
-
-    @Override
     public RedisSubscription getSubscription() {
-        return redisSubscription;
+        return new LettuceSubscription(redisClient.connectPubSub(ByteArrayCodec.INSTANCE));
     }
 
     @Override
     public void stop() {
-        if (redisSubscription != null) {
-            redisSubscription.close();
-        }
-
         if (conn.isOpen()) {
             conn.close();
         }

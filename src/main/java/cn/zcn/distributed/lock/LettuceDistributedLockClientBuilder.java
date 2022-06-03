@@ -36,7 +36,7 @@ class LettuceDistributedLockClientBuilder implements DistributedLockClientBuilde
             throw new IllegalStateException("Must config lettuce instance.");
         }
 
-        RedisDistributedLockCreator redisDistributedLockCreator = new RedisDistributedLockCreator(config, redisCommandFactory);
+        RedisDistributedLockCreator redisDistributedLockCreator = new RedisDistributedLockCreator(config, redisCommandFactory, false);
         redisDistributedLockCreator.start();
 
         return new DistributedLockClient(redisDistributedLockCreator);

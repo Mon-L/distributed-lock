@@ -17,11 +17,11 @@ public class RedisDistributedLockCreator implements DistributedLockCreator {
     private final RedisCommandFactory redisCommandFactory;
     private final RedisSubscriptionService redisSubscriptionService;
 
-    public RedisDistributedLockCreator(Config config, RedisCommandFactory redisCommandFactory) {
+    public RedisDistributedLockCreator(Config config, RedisCommandFactory redisCommandFactory, boolean isBlocking) {
         this.config = config;
         this.timer = new HashedWheelTimer();
         this.redisCommandFactory = redisCommandFactory;
-        this.redisSubscriptionService = new RedisSubscriptionService(config, redisCommandFactory, timer);
+        this.redisSubscriptionService = new RedisSubscriptionService(config, redisCommandFactory, timer, isBlocking);
         this.lockSubscription = new LockSubscription(redisSubscriptionService);
     }
 

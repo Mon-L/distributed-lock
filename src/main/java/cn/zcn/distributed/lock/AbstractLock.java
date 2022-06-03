@@ -4,7 +4,6 @@ import cn.zcn.distributed.lock.subscription.LockSubscription;
 import cn.zcn.distributed.lock.subscription.LockSubscriptionEntry;
 import io.netty.util.Timeout;
 import io.netty.util.Timer;
-import io.netty.util.TimerTask;
 
 import java.util.Map;
 import java.util.concurrent.*;
@@ -19,13 +18,8 @@ import java.util.concurrent.atomic.AtomicLong;
 public abstract class AbstractLock implements Lock {
 
     private static class RenewEntry {
-        private final long threadId;
         private final AtomicLong count = new AtomicLong(0);
         private volatile Timeout timeout;
-
-        private RenewEntry(long threadId) {
-            this.threadId = threadId;
-        }
 
         private void increase() {
             count.incrementAndGet();
@@ -45,13 +39,14 @@ public abstract class AbstractLock implements Lock {
     }
 
     private static final Map<String, RenewEntry> renewEntries = new ConcurrentHashMap<>();
+    private static final String LOCK_PREFIX = "-lock-";
 
-    protected final String lockName;
-    protected final String instanceId;
-    private final static String LOCK_PREFIX = "-lock-";
     private final Timer timer;
     private final LockSubscription lockSubscription;
     private final Config config;
+
+    protected final String lockName;
+    protected final String instanceId;
 
     /**
      * @param lock       分布式锁的名称
@@ -197,7 +192,7 @@ public abstract class AbstractLock implements Lock {
     }
 
     private void startRenewTimer(long durationMillis, long threadId) {
-        RenewEntry renewEntry = new RenewEntry(threadId);
+        RenewEntry renewEntry = new RenewEntry();
         RenewEntry oldEntry = renewEntries.putIfAbsent(lockName, renewEntry);
 
         if (oldEntry != null) {
@@ -209,15 +204,12 @@ public abstract class AbstractLock implements Lock {
     }
 
     private void setTimeout(RenewEntry e, long durationMillis, long threadId) {
-        Timeout timeout = timer.newTimeout(new TimerTask() {
-            @Override
-            public void run(Timeout timeout) {
-                boolean ret = doRenew(durationMillis, threadId);
-                if (ret) {
-                    setTimeout(e, durationMillis, threadId);
-                } else {
-                    clearTimeout(true);
-                }
+        Timeout timeout = timer.newTimeout(taskTimeout -> {
+            boolean ret = doRenew(durationMillis, threadId);
+            if (ret) {
+                setTimeout(e, durationMillis, threadId);
+            } else {
+                clearTimeout(true);
             }
         }, durationMillis / 3, TimeUnit.MILLISECONDS);
 
@@ -248,7 +240,7 @@ public abstract class AbstractLock implements Lock {
     }
 
     /**
-     * e.g. 5b978978-ed05-4715-b9b0-bc0217278329:78
+     * e.g. 5b978978ed054715b9b0bc0217278329:78
      */
     protected String getLockEntry(long threadId) {
         return instanceId + ":" + threadId;

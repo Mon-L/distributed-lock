@@ -9,19 +9,22 @@ import io.netty.util.HashedWheelTimer;
 import io.netty.util.Timer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 public class RedisSubscriptionServiceTest {
 
-    static RedisCommandFactory[] testParams() {
-        return new RedisCommandFactory[]{
-                RedisCommandFactoryExtensions.lettuceCommandFactory
-        };
+    static Stream<Arguments> testParams() {
+        return Stream.of(
+                Arguments.of(RedisCommandFactoryExtensions.jedisPoolCommandFactory, true),
+                Arguments.of(RedisCommandFactoryExtensions.lettuceCommandFactory, false)
+        );
     }
 
     private final String lock = "lock";
@@ -39,12 +42,11 @@ public class RedisSubscriptionServiceTest {
 
     @ParameterizedTest
     @MethodSource("testParams")
-    void testSubscribe(RedisCommandFactory commandFactory) throws InterruptedException {
-        RedisSubscriptionService subscriptionService = new RedisSubscriptionService(config, commandFactory, timer);
+    void testSubscribe(RedisCommandFactory commandFactory, boolean isBlocking) {
+        RedisSubscriptionService subscriptionService = new RedisSubscriptionService(config, commandFactory, timer, isBlocking);
         subscriptionService.start();
 
         CompletableFuture<Void> promise = subscriptionService.subscribe(lock, listener);
-        TimeUnit.SECONDS.sleep(1);
 
         assertTrue(promise.isDone());
         assertFalse(promise.isCompletedExceptionally());
@@ -57,23 +59,24 @@ public class RedisSubscriptionServiceTest {
 
     @ParameterizedTest
     @MethodSource("testParams")
-    void testUnsubscribe(RedisCommandFactory commandFactory) throws InterruptedException {
-        RedisSubscriptionService subscriptionService = new RedisSubscriptionService(config, commandFactory, timer);
+    void testUnsubscribe(RedisCommandFactory commandFactory, boolean isBlocking) throws InterruptedException {
+        RedisSubscriptionService subscriptionService = new RedisSubscriptionService(config, commandFactory, timer, isBlocking);
         subscriptionService.start();
 
         subscriptionService.subscribe(lock, listener);
-        TimeUnit.SECONDS.sleep(1);
         assertEquals(1, subscriptionService.getSubscribedChannels());
 
         subscriptionService.unsubscribe(lock);
         TimeUnit.SECONDS.sleep(1);
         assertEquals(0, subscriptionService.getSubscribedChannels());
+
+        subscriptionService.stop();
     }
 
     @ParameterizedTest
     @MethodSource("testParams")
-    void testStop(RedisCommandFactory commandFactory) throws InterruptedException {
-        RedisSubscriptionService subscriptionService = new RedisSubscriptionService(config, commandFactory, timer);
+    void testStop(RedisCommandFactory commandFactory, boolean isBlocking) throws InterruptedException {
+        RedisSubscriptionService subscriptionService = new RedisSubscriptionService(config, commandFactory, timer, isBlocking);
         subscriptionService.start();
 
         subscriptionService.subscribe(lock, listener);
@@ -81,7 +84,6 @@ public class RedisSubscriptionServiceTest {
 
         subscriptionService.stop();
         TimeUnit.SECONDS.sleep(1);
-
         assertEquals(0, subscriptionService.getSubscribedChannels());
     }
 }

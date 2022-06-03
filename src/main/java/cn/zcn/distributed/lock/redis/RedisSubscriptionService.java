@@ -37,11 +37,14 @@ public class RedisSubscriptionService implements LockSubscriptionService {
     private final Timer timer;
     private final RedisCommandFactory commandFactory;
     private final Map<ByteArrayHolder, LockMessageListener> channelListeners = new HashMap<>();
+    private final boolean isBlocking;
+
     private BlockingSubscriptionTask subscriptionTask;
 
-    public RedisSubscriptionService(Config config, RedisCommandFactory commandFactory, Timer timer) {
+    public RedisSubscriptionService(Config config, RedisCommandFactory commandFactory, Timer timer, boolean isBlocking) {
         this.timer = timer;
         this.config = config;
+        this.isBlocking = isBlocking;
         this.commandFactory = commandFactory;
     }
 
@@ -49,7 +52,12 @@ public class RedisSubscriptionService implements LockSubscriptionService {
     public void start() {
         if (running.compareAndSet(false, true)) {
             DispatchLockMessageListener lockMessageListener = new DispatchLockMessageListener(channelListeners);
-            subscriptionTask = new BlockingSubscriptionTask(commandFactory, lockMessageListener);
+
+            if (isBlocking) {
+                subscriptionTask = new BlockingSubscriptionTask(commandFactory, lockMessageListener);
+            } else {
+                subscriptionTask = new SubscriptionTask(commandFactory, lockMessageListener);
+            }
         }
     }
 
@@ -58,7 +66,7 @@ public class RedisSubscriptionService implements LockSubscriptionService {
     }
 
     public long getSubscribedChannels() {
-        RedisSubscription redisSubscription = commandFactory.getSubscription();
+        RedisSubscription redisSubscription = subscriptionTask.getRedisSubscription();
         return redisSubscription != null ? redisSubscription.getSubscribedChannels() : 0;
     }
 
@@ -180,8 +188,21 @@ public class RedisSubscriptionService implements LockSubscriptionService {
         }
     }
 
+    private class SubscriptionTask extends BlockingSubscriptionTask {
+
+        private SubscriptionTask(RedisCommandFactory commandFactory, LockMessageListener messageListener) {
+            super(commandFactory, messageListener);
+        }
+
+        @Override
+        protected void doSubscribe(RedisSubscriptionListener listener, byte[]... channel) {
+            redisSubscription.subscribe(listener, channel);
+        }
+    }
+
     private class BlockingSubscriptionTask implements RedisSubscriptionListener {
 
+        protected RedisSubscription redisSubscription;
         private final RedisCommandFactory commandFactory;
         private final LockMessageListener messageListener;
         private volatile CompletableFuture<Void> initPromise;
@@ -214,16 +235,16 @@ public class RedisSubscriptionService implements LockSubscriptionService {
         public void onUnsubscribe(byte[] channel, long subscribedChannels) {
         }
 
-        private CompletableFuture<Void> getSubscriptionPromise(ByteArrayHolder channel) {
-            return subscriptionPromises.get(channel);
-        }
-
         private void addSubscriptionPromise(ByteArrayHolder channel, CompletableFuture<Void> promise) {
             subscriptionPromises.put(channel, promise);
         }
 
         private void removeSubscriptionPromise(ByteArrayHolder channel, CompletableFuture<Void> promise) {
             subscriptionPromises.remove(channel, promise);
+        }
+
+        private RedisSubscription getRedisSubscription() {
+            return redisSubscription;
         }
 
         private CompletableFuture<Void> init() {
@@ -244,62 +265,62 @@ public class RedisSubscriptionService implements LockSubscriptionService {
                 });
 
                 Set<ByteArrayHolder> channels = new HashSet<>(channelListeners.keySet());
+                redisSubscription = commandFactory.getSubscription();
 
-                executor.execute(() -> {
-                    if (!running.get()) {
-                        return;
-                    }
-
-                    try {
-                        doSubscribe(BlockingSubscriptionTask.this, unwrap(channels));
-                        state = NOT_LISTEN;
-                    } catch (Throwable t) {
-                        state = NOT_LISTEN;
-                        initPromise.completeExceptionally(t);
-
-                        if (running.get()) {
-                            sleepBeforeReconnect();
-                            tryListen();
-                        }
-                    }
-                });
+                try {
+                    doSubscribe(this, unwrap(channels));
+                } catch (Exception e) {
+                    handleSubscriptionException(e);
+                }
 
                 return initPromise;
             }
         }
 
-        private void doSubscribe(RedisSubscriptionListener listener, byte[]... channel) {
-            commandFactory.subscribe(listener, channel);
+        private void handleSubscriptionException(Exception e) {
+            state = NOT_LISTEN;
+            initPromise.completeExceptionally(e);
+
+            if (running.get()) {
+                sleepBeforeReconnect();
+                tryListen();
+            }
+        }
+
+        protected void doSubscribe(RedisSubscriptionListener listener, byte[]... channel) {
+            executor.execute(() -> {
+                if (!running.get()) {
+                    return;
+                }
+
+                try {
+                    redisSubscription.subscribe(listener, channel);
+                    state = NOT_LISTEN;
+                } catch (Exception e) {
+                    handleSubscriptionException(e);
+                }
+            });
         }
 
         private void doSubscribe(byte[] channel) {
-            if (channel.length > 0) {
+            if (channel != null && channel.length > 0) {
                 synchronized (this) {
-                    RedisSubscription subscription = commandFactory.getSubscription();
-                    if (subscription != null) {
-                        subscription.subscribe(channel);
-                    }
+                    redisSubscription.subscribe(channel);
                 }
             }
         }
 
         private void doUnsubscribe(byte[] channel) {
-            if (channel.length > 0) {
+            if (channel != null && channel.length > 0) {
                 synchronized (this) {
-                    RedisSubscription subscription = commandFactory.getSubscription();
-                    if (subscription != null) {
-                        subscription.unsubscribe(channel);
-                    }
+                    redisSubscription.unsubscribe(channel);
                 }
             }
         }
 
         private void doUnsubscribeAll() {
             synchronized (this) {
-                RedisSubscription subscription = commandFactory.getSubscription();
-                if (subscription != null) {
-                    subscription.close();
-                }
+                redisSubscription.unsubscribe();
             }
         }
 
@@ -312,7 +333,9 @@ public class RedisSubscriptionService implements LockSubscriptionService {
         }
 
         private void shutdown() {
-            doUnsubscribeAll();
+            if (redisSubscription != null && redisSubscription.isAlive()) {
+                redisSubscription.close();
+            }
             executor.shutdown();
         }
     }
