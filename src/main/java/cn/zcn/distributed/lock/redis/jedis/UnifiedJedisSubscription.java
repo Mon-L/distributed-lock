@@ -1,15 +1,12 @@
 package cn.zcn.distributed.lock.redis.jedis;
 
-import cn.zcn.distributed.lock.redis.RedisSubscription;
+import cn.zcn.distributed.lock.redis.AbstractRedisSubscription;
 import cn.zcn.distributed.lock.redis.RedisSubscriptionListener;
 import redis.clients.jedis.BinaryJedisPubSub;
 import redis.clients.jedis.UnifiedJedis;
 
-import java.util.concurrent.atomic.AtomicBoolean;
-
-public class UnifiedJedisSubscription implements RedisSubscription {
+public class UnifiedJedisSubscription extends AbstractRedisSubscription {
     private final UnifiedJedis jedis;
-    private final AtomicBoolean isSubscribed = new AtomicBoolean(false);
     private BinaryJedisPubSub pubSub;
 
     UnifiedJedisSubscription(UnifiedJedis jedis) {
@@ -17,26 +14,18 @@ public class UnifiedJedisSubscription implements RedisSubscription {
     }
 
     @Override
-    public void subscribe(RedisSubscriptionListener listener, byte[]... channels) {
-        if (isSubscribed.get()) {
-            throw new IllegalStateException("Already subscribed. use subscribe(channels) to add new channels.");
-        }
-
-        if (isSubscribed.compareAndSet(false, true)) {
-            this.pubSub = new JedisPubSubAdapter(listener);
-            jedis.subscribe(pubSub, channels);
-        } else {
-            subscribe(listener, channels);
-        }
+    public void doSubscribe(RedisSubscriptionListener listener, byte[]... channels) {
+        this.pubSub = new JedisPubSubAdapter(listener);
+        jedis.subscribe(pubSub, channels);
     }
 
     @Override
-    public void subscribe(byte[]... channels) {
+    public void doSubscribe(byte[]... channels) {
         pubSub.subscribe(channels);
     }
 
     @Override
-    public void unsubscribe(byte[]... channels) {
+    public void doUnsubscribe(byte[]... channels) {
         pubSub.unsubscribe(channels);
     }
 

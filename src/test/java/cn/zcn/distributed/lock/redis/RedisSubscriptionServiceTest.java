@@ -1,10 +1,8 @@
-package cn.zcn.distributed.lock.redis.redis;
+package cn.zcn.distributed.lock.redis;
 
 import cn.zcn.distributed.lock.Config;
-import cn.zcn.distributed.lock.redis.RedisCommandFactory;
-import cn.zcn.distributed.lock.redis.RedisSubscriptionService;
-import cn.zcn.distributed.lock.redis.test.redis.RedisCommandFactoryExtensions;
 import cn.zcn.distributed.lock.subscription.LockMessageListener;
+import cn.zcn.distributed.lock.test.redis.RedisCommandFactoryExtensions;
 import io.netty.util.HashedWheelTimer;
 import io.netty.util.Timer;
 import org.junit.jupiter.api.BeforeEach;

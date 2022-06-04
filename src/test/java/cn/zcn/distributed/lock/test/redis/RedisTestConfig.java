@@ -1,4 +1,4 @@
-package cn.zcn.distributed.lock.redis.test.redis;
+package cn.zcn.distributed.lock.test.redis;
 
 public class RedisTestConfig {
     private String host;

@@ -1,12 +1,13 @@
 package cn.zcn.distributed.lock.redis.lettuce;
 
+import cn.zcn.distributed.lock.redis.AbstractRedisSubscription;
 import cn.zcn.distributed.lock.redis.RedisSubscription;
 import cn.zcn.distributed.lock.redis.RedisSubscriptionListener;
 import io.lettuce.core.pubsub.RedisPubSubAdapter;
 import io.lettuce.core.pubsub.StatefulRedisPubSubConnection;
 import io.lettuce.core.pubsub.api.sync.RedisPubSubCommands;
 
-class LettuceSubscription implements RedisSubscription {
+class LettuceSubscription extends AbstractRedisSubscription {
 
     private LettucePubSubAdapter lettucePubSubAdapter;
     private final RedisPubSubCommands<byte[], byte[]> pubSubCommands;
@@ -18,7 +19,7 @@ class LettuceSubscription implements RedisSubscription {
     }
 
     @Override
-    public void subscribe(RedisSubscriptionListener listener, byte[]... channels) {
+    public void doSubscribe(RedisSubscriptionListener listener, byte[]... channels) {
         this.lettucePubSubAdapter = new LettucePubSubAdapter(listener);
         this.connection.addListener(lettucePubSubAdapter);
 
@@ -26,12 +27,12 @@ class LettuceSubscription implements RedisSubscription {
     }
 
     @Override
-    public void subscribe(byte[]... channels) {
+    public void doSubscribe(byte[]... channels) {
         pubSubCommands.subscribe(channels);
     }
 
     @Override
-    public void unsubscribe(byte[]... channels) {
+    public void doUnsubscribe(byte[]... channels) {
         pubSubCommands.unsubscribe(channels);
     }
 

@@ -1,4 +1,4 @@
-package cn.zcn.distributed.lock.redis.test.redis;
+package cn.zcn.distributed.lock.test.redis;
 
 import cn.zcn.distributed.lock.redis.RedisCommandFactory;
 import cn.zcn.distributed.lock.redis.jedis.JedisPoolCommandFactory;
