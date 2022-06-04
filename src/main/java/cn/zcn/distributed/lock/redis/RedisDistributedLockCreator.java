@@ -35,7 +35,7 @@ public class RedisDistributedLockCreator implements DistributedLockCreator {
 
     @Override
     public Lock getLock(String name) {
-        return new RedisLock(name, InstanceId.VALUE, timer, config, lockSubscription);
+        return new RedisLock(name, InstanceId.VALUE, timer, config, lockSubscription, redisCommandFactory);
     }
 
     @Override
