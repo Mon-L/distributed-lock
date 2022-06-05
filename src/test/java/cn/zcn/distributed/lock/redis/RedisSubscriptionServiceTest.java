@@ -14,7 +14,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
 public class RedisSubscriptionServiceTest {
 
@@ -46,10 +46,10 @@ public class RedisSubscriptionServiceTest {
 
         CompletableFuture<Void> promise = subscriptionService.subscribe(lock, listener);
 
-        assertTrue(promise.isDone());
-        assertFalse(promise.isCompletedExceptionally());
-        assertEquals(1, subscriptionService.getSubscribedChannels());
-        assertEquals(1, subscriptionService.getSubscribedListeners());
+        assertThat(promise.isDone()).isTrue();
+        assertThat(promise.isCompletedExceptionally()).isFalse();
+        assertThat(subscriptionService.getSubscribedChannels()).isEqualTo(1);
+        assertThat(subscriptionService.getSubscribedListeners()).isEqualTo(1);
 
         subscriptionService.stop();
     }
@@ -62,11 +62,11 @@ public class RedisSubscriptionServiceTest {
         subscriptionService.start();
 
         subscriptionService.subscribe(lock, listener);
-        assertEquals(1, subscriptionService.getSubscribedChannels());
+        assertThat(subscriptionService.getSubscribedChannels()).isEqualTo(1);
 
         subscriptionService.unsubscribe(lock);
         TimeUnit.SECONDS.sleep(1);
-        assertEquals(0, subscriptionService.getSubscribedChannels());
+        assertThat(subscriptionService.getSubscribedChannels()).isEqualTo(0);
 
         subscriptionService.stop();
     }
@@ -78,10 +78,10 @@ public class RedisSubscriptionServiceTest {
         subscriptionService.start();
 
         subscriptionService.subscribe(lock, listener);
-        assertEquals(1, subscriptionService.getSubscribedChannels());
+        assertThat(subscriptionService.getSubscribedChannels()).isEqualTo(1);
 
         subscriptionService.stop();
         TimeUnit.SECONDS.sleep(1);
-        assertEquals(0, subscriptionService.getSubscribedChannels());
+        assertThat(subscriptionService.getSubscribedChannels()).isEqualTo(0);
     }
 }

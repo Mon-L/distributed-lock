@@ -10,7 +10,7 @@ import redis.clients.jedis.util.Pool;
 import java.util.Collections;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
 public class JedisPoolCommandFactoryTest {
@@ -48,7 +48,7 @@ public class JedisPoolCommandFactoryTest {
         RedisSubscription redisSubscription = commandFactory.getSubscription();
 
         verify(jedisPool, times(1)).getResource();
-        assertNotNull(redisSubscription);
+        assertThat(redisSubscription).isNotNull();
     }
 
     @Test

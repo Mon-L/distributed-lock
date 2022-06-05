@@ -87,8 +87,11 @@ public class LockSubscription {
                 return;
             }
 
-            if (UNLOCK_MESSAGE.equals(message)) {
-                lockSubscriptionEntry.getUnLockLatch().release();
+            if (message instanceof byte[]) {
+                String str = new String((byte[]) message);
+                if (UNLOCK_MESSAGE.equals(Long.valueOf(str))) {
+                    lockSubscriptionEntry.getUnLockLatch().release();
+                }
             }
         };
     }

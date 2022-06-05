@@ -2,7 +2,6 @@ package cn.zcn.distributed.lock.redis.jedis;
 
 import cn.zcn.distributed.lock.redis.RedisCommandFactory;
 import cn.zcn.distributed.lock.redis.RedisSubscription;
-import cn.zcn.distributed.lock.redis.jedis.UnifiedJedisCommandFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import redis.clients.jedis.UnifiedJedis;
@@ -10,7 +9,7 @@ import redis.clients.jedis.UnifiedJedis;
 import java.util.Collections;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
 public class UnifiedJedisCommandFactoryTest {
@@ -38,7 +37,7 @@ public class UnifiedJedisCommandFactoryTest {
     @Test
     public void testGetSubscription() {
         RedisSubscription redisSubscription = commandFactory.getSubscription();
-        assertNotNull(redisSubscription);
+        assertThat(redisSubscription).isNotNull();
     }
 
     @Test

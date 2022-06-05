@@ -12,6 +12,7 @@
         <maven.compiler.source>8</maven.compiler.source>
         <maven.compiler.target>8</maven.compiler.target>
         <junit.version>5.8.2</junit.version>
+        <assertj.version>3.23.1</assertj.version>
         <mockito.version>4.0.0</mockito.version>
         <snakeyaml.version>1.29</snakeyaml.version>
         <netty.version>4.1.77.Final</netty.version>
@@ -36,6 +37,13 @@
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <version>3.23.1</version>
             <scope>test</scope>
         </dependency>
 

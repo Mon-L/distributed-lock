@@ -4,7 +4,7 @@ import cn.zcn.distributed.lock.test.redis.NoopRedisSubscriptionListener;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.assertj.core.api.Assertions.assertThatException;
 import static org.mockito.Mockito.*;
 
 public class AbstractRedisSubscriptionTest {
@@ -65,28 +65,49 @@ public class AbstractRedisSubscriptionTest {
 
     @Test
     void testSubscribeWithNullListener() {
-        assertThrows(IllegalArgumentException.class, () -> redisSubscription.subscribe(null, new byte[][]{"l".getBytes()}));
+        assertThatException()
+                .isThrownBy(() -> redisSubscription.subscribe(null, new byte[][]{"l".getBytes()}))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void testSubscribeWithEmptyChannel() {
-        assertThrows(IllegalArgumentException.class, () -> redisSubscription.subscribe(new NoopRedisSubscriptionListener(), null));
-        assertThrows(IllegalArgumentException.class, () -> redisSubscription.subscribe(new NoopRedisSubscriptionListener(), new byte[0][0]));
+        assertThatException()
+                .isThrownBy(() -> redisSubscription.subscribe(new NoopRedisSubscriptionListener(), null))
+                .isInstanceOf(IllegalArgumentException.class);
 
-        assertThrows(IllegalArgumentException.class, () -> redisSubscription.subscribe());
-        assertThrows(IllegalArgumentException.class, () -> redisSubscription.subscribe(new byte[0][0]));
+        assertThatException()
+                .isThrownBy(() -> redisSubscription.subscribe(new NoopRedisSubscriptionListener(), new byte[0][0]))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        assertThatException()
+                .isThrownBy(() -> redisSubscription.subscribe())
+                .isInstanceOf(IllegalArgumentException.class);
+
+        assertThatException()
+                .isThrownBy(() -> redisSubscription.subscribe(new byte[0][0]))
+                .isInstanceOf(IllegalArgumentException.class);
+
     }
 
     @Test
     void testUnsubscribeWithEmptyChannel() {
-        assertThrows(IllegalArgumentException.class, () -> redisSubscription.unsubscribe());
-        assertThrows(IllegalArgumentException.class, () -> redisSubscription.unsubscribe(new byte[0][0]));
+        assertThatException()
+                .isThrownBy(() -> redisSubscription.unsubscribe())
+                .isInstanceOf(IllegalArgumentException.class);
+
+        assertThatException()
+                .isThrownBy(() -> redisSubscription.unsubscribe(new byte[0][0]))
+                .isInstanceOf(IllegalArgumentException.class);
+
     }
 
     @Test
     void testSubscribeRepeated() {
         redisSubscription.subscribe(new NoopRedisSubscriptionListener(), "l".getBytes());
-        assertThrows(IllegalStateException.class, () -> redisSubscription.subscribe(new NoopRedisSubscriptionListener(), "l".getBytes()));
-    }
 
+        assertThatException()
+                .isThrownBy(() -> redisSubscription.subscribe(new NoopRedisSubscriptionListener(), "l".getBytes()))
+                .isInstanceOf(IllegalStateException.class);
+    }
 }

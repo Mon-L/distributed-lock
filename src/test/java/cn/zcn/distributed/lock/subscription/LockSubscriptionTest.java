@@ -12,6 +12,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 public class LockSubscriptionTest {
 
     private final String lockName = "lock1";
@@ -36,8 +38,8 @@ public class LockSubscriptionTest {
         CompletableFuture<LockSubscriptionEntry> promise = lockSubscription.subscribe(lockName);
         LockSubscriptionEntry entry = promise.get();
 
-        Assertions.assertTrue(entry.getPromise().isDone());
-        Assertions.assertEquals(1, entry.getCount());
+        assertThat(entry.getPromise().isDone()).isTrue();
+        assertThat(entry.getCount()).isEqualTo(1);
     }
 
     @Test
@@ -72,12 +74,12 @@ public class LockSubscriptionTest {
         }
 
         //判断 channel 订阅次数
-        Assertions.assertEquals(threadNum * iterations, entry.getCount());
+        assertThat(entry.getCount()).isEqualTo(threadNum * iterations);
         Mockito.verify(lockSubscriptionService, Mockito.times(1)).subscribe(Mockito.anyString(), Mockito.any());
 
         promises.forEach(f -> {
-            Assertions.assertTrue(f.isDone());
-            Assertions.assertFalse(f.isCompletedExceptionally());
+            assertThat(f.isDone()).isTrue();
+            assertThat(f.isCompletedExceptionally()).isFalse();
         });
     }
 
@@ -118,7 +120,7 @@ public class LockSubscriptionTest {
         }
 
         //判断 channel 订阅次数
-        Assertions.assertEquals(threadNum * iterations, entry.getCount());
+        assertThat(entry.getCount()).isEqualTo(threadNum * iterations);
         Mockito.verify(lockSubscriptionService, Mockito.times(1)).subscribe(Mockito.anyString(), Mockito.any());
 
         //剩下的订阅都成功
@@ -135,7 +137,7 @@ public class LockSubscriptionTest {
 
         //只取消订阅 channel 一次
         Mockito.verify(lockSubscriptionService, Mockito.times(1)).unsubscribe(Mockito.any());
-        Assertions.assertEquals(0, entry.getCount());
+        assertThat(entry.getCount()).isEqualTo(0);
     }
 
     private void asyncRun(int threadNum, Runnable runnable) {
