@@ -3,7 +3,7 @@ package cn.zcn.distributed.lock.subscription;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Semaphore;
 
-public class LockSubscriptionEntry {
+public class LockSubscriptionHolder {
 
     /**
      * 锁的订阅数量
@@ -16,13 +16,13 @@ public class LockSubscriptionEntry {
     private final String name;
 
     /**
-     * 订阅结果
+     * 锁的订阅结果
      */
-    private final CompletableFuture<LockSubscriptionEntry> promise;
+    private final CompletableFuture<LockSubscriptionHolder> promise;
 
     private final Semaphore unLockSemaphore = new Semaphore(0);
 
-    public LockSubscriptionEntry(String name) {
+    public LockSubscriptionHolder(String name) {
         this.name = name;
         this.promise = new CompletableFuture<>();
     }
@@ -43,7 +43,7 @@ public class LockSubscriptionEntry {
         }
     }
 
-    public CompletableFuture<LockSubscriptionEntry> getPromise() {
+    public CompletableFuture<LockSubscriptionHolder> getPromise() {
         return promise;
     }
 
@@ -57,7 +57,7 @@ public class LockSubscriptionEntry {
 
     @Override
     public String toString() {
-        return "LockSubscriptionEntry{" +
+        return "LockSubscriptionHolder{" +
                 "name=" + name +
                 ", count='" + count + '\'' +
                 '}';

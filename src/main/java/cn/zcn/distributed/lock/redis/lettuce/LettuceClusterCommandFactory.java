@@ -37,5 +37,7 @@ public class LettuceClusterCommandFactory implements RedisCommandFactory {
         if (conn.isOpen()) {
             conn.close();
         }
+
+        redisClient.shutdown();
     }
 }

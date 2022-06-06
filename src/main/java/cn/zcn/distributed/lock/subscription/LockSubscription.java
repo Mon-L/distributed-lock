@@ -12,15 +12,15 @@ public class LockSubscription {
     public static final byte[] UNLOCK_MESSAGE = LongEncoder.encode(0L);
 
     private final LockSubscriptionService subscriptionService;
-    private final ConcurrentMap<String, LockSubscriptionEntry> entries = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, LockSubscriptionHolder> holders = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, SerialRunnableQueen> queens = new ConcurrentHashMap<>();
 
     public LockSubscription(LockSubscriptionService subscriptionService) {
         this.subscriptionService = subscriptionService;
     }
 
-    public CompletableFuture<LockSubscriptionEntry> subscribe(String channel) {
-        CompletableFuture<LockSubscriptionEntry> newPromise = new CompletableFuture<>();
+    public CompletableFuture<LockSubscriptionHolder> subscribe(String channel) {
+        CompletableFuture<LockSubscriptionHolder> newPromise = new CompletableFuture<>();
 
         SerialRunnableQueen queen = queens.computeIfAbsent(channel, s -> new SerialRunnableQueen());
         queen.add(() -> {
@@ -30,17 +30,17 @@ public class LockSubscription {
                 return;
             }
 
-            LockSubscriptionEntry newEntry = new LockSubscriptionEntry(channel);
-            newEntry.increment();
+            LockSubscriptionHolder newHolder = new LockSubscriptionHolder(channel);
+            newHolder.increment();
 
-            LockSubscriptionEntry oldEntry = entries.putIfAbsent(channel, newEntry);
-            if (oldEntry != null) {
-                oldEntry.increment();
+            LockSubscriptionHolder oldHolder = holders.putIfAbsent(channel, newHolder);
+            if (oldHolder != null) {
+                oldHolder.increment();
                 queen.runNext();
-                oldEntry.getPromise().whenComplete((r, t) -> {
+                oldHolder.getPromise().whenComplete((r, t) -> {
                     if (t != null) {
                         newPromise.completeExceptionally(t);
-                        unsubscribe(oldEntry, channel);
+                        unsubscribe(oldHolder, channel);
                     } else {
                         newPromise.complete(r);
                     }
@@ -48,18 +48,18 @@ public class LockSubscription {
                 return;
             }
 
-            LockMessageListener listener = createListener(channel, newEntry);
+            LockMessageListener listener = createListener(channel, newHolder);
             CompletableFuture<?> subscriptionPromise = subscriptionService.subscribe(channel, listener);
-            subscriptionPromise.whenComplete((r, t) -> newEntry.complete(t));
+            subscriptionPromise.whenComplete((r, t) -> newHolder.complete(t));
 
-            newEntry.getPromise().whenComplete((r, t) -> {
+            newHolder.getPromise().whenComplete((r, t) -> {
                 if (newPromise.isDone()) {
                     //订阅被打断或超时
-                    unsubscribe(newEntry, channel);
+                    unsubscribe(newHolder, channel);
                 } else {
                     if (t != null) {
                         newPromise.completeExceptionally(t);
-                        unsubscribe(newEntry, channel);
+                        unsubscribe(newHolder, channel);
                     } else {
                         newPromise.complete(r);
                     }
@@ -71,11 +71,11 @@ public class LockSubscription {
         return newPromise;
     }
 
-    public void unsubscribe(LockSubscriptionEntry entry, String channel) {
+    public void unsubscribe(LockSubscriptionHolder entry, String channel) {
         SerialRunnableQueen queen = queens.get(channel);
         queen.add(() -> {
             if (entry.decrement() == 0) {
-                entries.remove(channel);
+                holders.remove(channel);
                 subscriptionService.unsubscribe(channel)
                         .whenComplete((r, t) -> queen.runNext());
             } else {
@@ -84,7 +84,7 @@ public class LockSubscription {
         });
     }
 
-    private LockMessageListener createListener(String channelName, LockSubscriptionEntry lockSubscriptionEntry) {
+    private LockMessageListener createListener(String channelName, LockSubscriptionHolder lockSubscriptionHolder) {
         return (channel, message) -> {
             if (!channelName.equals(channel)) {
                 return;
@@ -92,7 +92,7 @@ public class LockSubscription {
 
             if (message instanceof byte[]) {
                 if (Arrays.equals((byte[]) message, UNLOCK_MESSAGE)) {
-                    lockSubscriptionEntry.getUnLockLatch().release();
+                    lockSubscriptionHolder.getUnLockLatch().release();
                 }
             }
         };

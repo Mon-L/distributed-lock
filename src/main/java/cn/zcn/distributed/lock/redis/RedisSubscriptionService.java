@@ -1,10 +1,7 @@
 package cn.zcn.distributed.lock.redis;
 
-import cn.zcn.distributed.lock.Config;
 import cn.zcn.distributed.lock.subscription.LockMessageListener;
 import cn.zcn.distributed.lock.subscription.LockSubscriptionService;
-import io.netty.util.Timeout;
-import io.netty.util.Timer;
 
 import java.nio.charset.StandardCharsets;
 import java.util.*;
@@ -19,7 +16,7 @@ public class RedisSubscriptionService implements LockSubscriptionService {
     private static final int NOT_LISTEN = -1;
 
     /**
-     * 正在监听chanel
+     * 正在监听channel
      */
     private static final int LISTENING = 1;
 
@@ -33,17 +30,13 @@ public class RedisSubscriptionService implements LockSubscriptionService {
      */
     private volatile int state = NOT_LISTEN;
 
-    private final Config config;
-    private final Timer timer;
     private final RedisCommandFactory commandFactory;
-    private final Map<ByteArrayHolder, LockMessageListener> channelListeners = new HashMap<>();
+    private final Map<ByteArrayHolder, LockMessageListener> channelListeners = new ConcurrentHashMap<>();
     private final boolean isBlocking;
 
-    private BlockingSubscriptionTask subscriptionTask;
+    private BlockingSubscriber subscriber;
 
-    public RedisSubscriptionService(Config config, RedisCommandFactory commandFactory, Timer timer, boolean isBlocking) {
-        this.timer = timer;
-        this.config = config;
+    public RedisSubscriptionService(RedisCommandFactory commandFactory, boolean isBlocking) {
         this.isBlocking = isBlocking;
         this.commandFactory = commandFactory;
     }
@@ -54,9 +47,9 @@ public class RedisSubscriptionService implements LockSubscriptionService {
             DispatchLockMessageListener lockMessageListener = new DispatchLockMessageListener(channelListeners);
 
             if (isBlocking) {
-                subscriptionTask = new BlockingSubscriptionTask(commandFactory, lockMessageListener);
+                subscriber = new BlockingSubscriber(commandFactory, lockMessageListener);
             } else {
-                subscriptionTask = new SubscriptionTask(commandFactory, lockMessageListener);
+                subscriber = new Subscriber(commandFactory, lockMessageListener);
             }
         }
     }
@@ -66,7 +59,7 @@ public class RedisSubscriptionService implements LockSubscriptionService {
     }
 
     public long getSubscribedChannels() {
-        RedisSubscription redisSubscription = subscriptionTask.getRedisSubscription();
+        RedisSubscription redisSubscription = subscriber.getRedisSubscription();
         return redisSubscription != null ? redisSubscription.getSubscribedChannels() : 0;
     }
 
@@ -77,10 +70,10 @@ public class RedisSubscriptionService implements LockSubscriptionService {
 
         if (running.get()) {
             if (state <= 0 && channelListeners.size() > 0) {
-                CompletableFuture<Void> initPromise = subscriptionTask.init();
+                CompletableFuture<Void> initPromise = subscriber.init();
 
                 try {
-                    initPromise.get(config.getTimeout(), TimeUnit.MILLISECONDS);
+                    initPromise.get(3, TimeUnit.SECONDS);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 } catch (ExecutionException e) {
@@ -104,27 +97,25 @@ public class RedisSubscriptionService implements LockSubscriptionService {
             //订阅异常或超时
             if (t != null) {
                 channelListeners.remove(channelHolder);
-                subscriptionTask.removeSubscriptionPromise(channelHolder, newPromise);
+                subscriber.removeSubscriptionPromise(channelHolder, newPromise);
             }
         });
 
         try {
             if (curState == NOT_LISTEN) {
-                subscriptionTask.addSubscriptionPromise(channelHolder, newPromise);
+                subscriber.addSubscriptionPromise(channelHolder, newPromise);
             }
 
             tryListen();
 
             if (curState == LISTENING) {
-                subscriptionTask.addSubscriptionPromise(channelHolder, newPromise);
-                subscriptionTask.doSubscribe(channelHolder.val);
+                subscriber.addSubscriptionPromise(channelHolder, newPromise);
+                subscriber.doSubscribe(channelHolder.val);
             }
         } catch (Throwable t) {
-            t.printStackTrace();
             newPromise.completeExceptionally(t);
         }
 
-        timeout(newPromise, "Subscribe channel timeout.");
         return newPromise;
     }
 
@@ -142,13 +133,13 @@ public class RedisSubscriptionService implements LockSubscriptionService {
         CompletableFuture<Void> newPromise = new CompletableFuture<>();
 
         try {
-            subscriptionTask.doUnsubscribe(channelHolder.val);
-            newPromise.complete(null);
+            subscriber.addUnsubscriptionPromise(channelHolder, newPromise);
+            subscriber.doUnsubscribe(channelHolder.val);
         } catch (Exception e) {
+            subscriber.removeUnsubscriptionPromise(channelHolder, newPromise);
             newPromise.completeExceptionally(e);
         }
 
-        timeout(newPromise, "Unsubscribe channel timeout.");
         return newPromise;
     }
 
@@ -167,30 +158,16 @@ public class RedisSubscriptionService implements LockSubscriptionService {
         return channels;
     }
 
-    private void timeout(CompletableFuture<Void> promise, String err) {
-        Timeout timeout = timer.newTimeout(t -> {
-            if (!promise.isDone()) {
-                promise.completeExceptionally(new TimeoutException(err));
-            }
-        }, config.getTimeout(), TimeUnit.MILLISECONDS);
-
-        promise.whenComplete((r, t) -> {
-            if (!timeout.isCancelled()) {
-                timeout.cancel();
-            }
-        });
-    }
-
     @Override
     public void stop() {
         if (running.compareAndSet(true, false)) {
-            subscriptionTask.shutdown();
+            subscriber.shutdown();
         }
     }
 
-    private class SubscriptionTask extends BlockingSubscriptionTask {
+    private class Subscriber extends BlockingSubscriber {
 
-        private SubscriptionTask(RedisCommandFactory commandFactory, LockMessageListener messageListener) {
+        private Subscriber(RedisCommandFactory commandFactory, LockMessageListener messageListener) {
             super(commandFactory, messageListener);
         }
 
@@ -200,7 +177,7 @@ public class RedisSubscriptionService implements LockSubscriptionService {
         }
     }
 
-    private class BlockingSubscriptionTask implements RedisSubscriptionListener {
+    private class BlockingSubscriber implements RedisSubscriptionListener {
 
         protected RedisSubscription redisSubscription;
         private final RedisCommandFactory commandFactory;
@@ -208,8 +185,9 @@ public class RedisSubscriptionService implements LockSubscriptionService {
         private volatile CompletableFuture<Void> initPromise;
         private final ExecutorService executor = Executors.newSingleThreadExecutor();
         private final Map<ByteArrayHolder, CompletableFuture<Void>> subscriptionPromises = new ConcurrentHashMap<>();
+        private final Map<ByteArrayHolder, CompletableFuture<Void>> unsubscriptionPromises = new ConcurrentHashMap<>();
 
-        private BlockingSubscriptionTask(RedisCommandFactory commandFactory, LockMessageListener messageListener) {
+        private BlockingSubscriber(RedisCommandFactory commandFactory, LockMessageListener messageListener) {
             this.commandFactory = commandFactory;
             this.messageListener = messageListener;
         }
@@ -233,6 +211,10 @@ public class RedisSubscriptionService implements LockSubscriptionService {
 
         @Override
         public void onUnsubscribe(byte[] channel, long subscribedChannels) {
+            CompletableFuture<Void> promise = unsubscriptionPromises.remove(new ByteArrayHolder(channel));
+            if (promise != null) {
+                promise.complete(null);
+            }
         }
 
         private void addSubscriptionPromise(ByteArrayHolder channel, CompletableFuture<Void> promise) {
@@ -241,6 +223,14 @@ public class RedisSubscriptionService implements LockSubscriptionService {
 
         private void removeSubscriptionPromise(ByteArrayHolder channel, CompletableFuture<Void> promise) {
             subscriptionPromises.remove(channel, promise);
+        }
+
+        private void addUnsubscriptionPromise(ByteArrayHolder channel, CompletableFuture<Void> promise) {
+            unsubscriptionPromises.put(channel, promise);
+        }
+
+        private void removeUnsubscriptionPromise(ByteArrayHolder channel, CompletableFuture<Void> promise) {
+            unsubscriptionPromises.remove(channel, promise);
         }
 
         private RedisSubscription getRedisSubscription() {
@@ -318,16 +308,10 @@ public class RedisSubscriptionService implements LockSubscriptionService {
             }
         }
 
-        private void doUnsubscribeAll() {
-            synchronized (this) {
-                redisSubscription.unsubscribe();
-            }
-        }
-
         private void sleepBeforeReconnect() {
             try {
-                Thread.sleep(config.getReconnectInterval());
-            } catch (InterruptedException interEx) {
+                TimeUnit.SECONDS.sleep(3);
+            } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
         }

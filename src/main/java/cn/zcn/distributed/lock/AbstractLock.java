@@ -1,7 +1,7 @@
 package cn.zcn.distributed.lock;
 
 import cn.zcn.distributed.lock.subscription.LockSubscription;
-import cn.zcn.distributed.lock.subscription.LockSubscriptionEntry;
+import cn.zcn.distributed.lock.subscription.LockSubscriptionHolder;
 import io.netty.util.Timeout;
 import io.netty.util.Timer;
 
@@ -17,7 +17,7 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public abstract class AbstractLock implements Lock {
 
-    private static class RenewEntry {
+    private static class LockRenewHolder {
         private final AtomicLong count = new AtomicLong(0);
         private volatile Timeout timeout;
 
@@ -38,36 +38,34 @@ public abstract class AbstractLock implements Lock {
         }
     }
 
-    private static final Map<String, RenewEntry> renewEntries = new ConcurrentHashMap<>();
-    private static final String LOCK_PREFIX = "-lock-";
+    private static final Map<String, LockRenewHolder> lockRenewHolders = new ConcurrentHashMap<>();
+    private static final String LOCK_PREFIX = "distributed-lock:";
     private static final int DEFAULT_LOCK_DURATION = 20;
 
     private final Timer timer;
     private final LockSubscription lockSubscription;
-    private final Config config;
 
     protected final String lockName;
-    protected final String instanceId;
+    protected final String clientId;
 
     /**
-     * @param lock       分布式锁的名称
-     * @param instanceId UUID
-     * @param timer      定时器
+     * @param lock     分布式锁的名称
+     * @param clientId UUID
+     * @param timer    定时器
      */
-    public AbstractLock(String lock, String instanceId, Timer timer, Config config, LockSubscription lockSubscription) {
+    public AbstractLock(String lock, String clientId, Timer timer, LockSubscription lockSubscription) {
         this.lockName = LOCK_PREFIX + lock;
-        this.instanceId = instanceId;
+        this.clientId = clientId;
         this.timer = timer;
-        this.config = config;
         this.lockSubscription = lockSubscription;
     }
 
-    private void timeout(CompletableFuture<?> future) {
+    private void startTimeoutSchedule(CompletableFuture<?> promise) {
         Timeout task = timer.newTimeout(t -> {
-            future.completeExceptionally(new TimeoutException("Subscribe lock timeout."));
-        }, config.getTimeout(), TimeUnit.MILLISECONDS);
+            promise.completeExceptionally(new TimeoutException("Subscribe lock timeout."));
+        }, 3, TimeUnit.SECONDS);
 
-        future.whenComplete((r, e) -> task.cancel());
+        promise.whenComplete((r, e) -> task.cancel());
     }
 
     @Override
@@ -87,20 +85,20 @@ public abstract class AbstractLock implements Lock {
         }
 
         //获取锁失败，订阅锁的状态
-        CompletableFuture<LockSubscriptionEntry> subPromise = lockSubscription.subscribe(lockName);
-        LockSubscriptionEntry lockSubEntry;
+        CompletableFuture<LockSubscriptionHolder> subscriptionPromise = lockSubscription.subscribe(lockName);
+        LockSubscriptionHolder lockSubscriptionHolder;
 
         try {
-            lockSubEntry = subPromise.get();
+            lockSubscriptionHolder = subscriptionPromise.get();
         } catch (InterruptedException e) {
-            subPromise.completeExceptionally(e);
+            subscriptionPromise.completeExceptionally(e);
             throw e;
         } catch (ExecutionException e) {
             throw new LockException("Unexpected exception while subscribe lock.", e.getCause());
         }
 
         //监听是否订阅超时
-        timeout(subPromise);
+        startTimeoutSchedule(subscriptionPromise);
 
         try {
             while (true) {
@@ -113,14 +111,14 @@ public abstract class AbstractLock implements Lock {
 
                 if (ttl >= 0) {
                     //锁已被其他线程锁定，需等待 ttl 毫秒
-                    lockSubEntry.getUnLockLatch().tryAcquire(ttl, TimeUnit.MILLISECONDS);
+                    lockSubscriptionHolder.getUnLockLatch().tryAcquire(ttl, TimeUnit.MILLISECONDS);
                 } else {
                     // 获取锁失败，但锁已过期
-                    lockSubEntry.getUnLockLatch().acquire();
+                    lockSubscriptionHolder.getUnLockLatch().acquire();
                 }
             }
         } finally {
-            lockSubscription.unsubscribe(lockSubEntry, lockName);
+            lockSubscription.unsubscribe(lockSubscriptionHolder, lockName);
         }
     }
 
@@ -143,8 +141,8 @@ public abstract class AbstractLock implements Lock {
         }
 
         //获取锁失败，订阅锁的状态
-        CompletableFuture<LockSubscriptionEntry> subPromise = lockSubscription.subscribe(lockName);
-        LockSubscriptionEntry lockSubEntry;
+        CompletableFuture<LockSubscriptionHolder> subPromise = lockSubscription.subscribe(lockName);
+        LockSubscriptionHolder lockSubEntry;
 
         try {
             lockSubEntry = subPromise.get(waitTimeMillis, TimeUnit.MILLISECONDS);
@@ -192,43 +190,43 @@ public abstract class AbstractLock implements Lock {
     private Long innerLock(long durationMillis, long threadId) {
         Long ttl = doLock(durationMillis, threadId);
         if (ttl == null) {
-            startRenewTimer(durationMillis, threadId);
+            startRenewScheduleIfNeeded(durationMillis, threadId);
         }
         return ttl;
     }
 
-    private void startRenewTimer(long durationMillis, long threadId) {
-        RenewEntry renewEntry = new RenewEntry();
-        RenewEntry oldEntry = renewEntries.putIfAbsent(lockName, renewEntry);
+    private void startRenewScheduleIfNeeded(long durationMillis, long threadId) {
+        LockRenewHolder lockRenewHolder = new LockRenewHolder();
+        LockRenewHolder oldEntry = lockRenewHolders.putIfAbsent(lockName, lockRenewHolder);
 
         if (oldEntry != null) {
             oldEntry.increase();
         } else {
-            renewEntry.increase();
-            setTimeout(renewEntry, durationMillis, threadId);
+            lockRenewHolder.increase();
+            doRenewSchedule(lockRenewHolder, durationMillis, threadId);
         }
     }
 
-    private void setTimeout(RenewEntry e, long durationMillis, long threadId) {
+    private void doRenewSchedule(LockRenewHolder e, long durationMillis, long threadId) {
         Timeout timeout = timer.newTimeout(taskTimeout -> {
             boolean ret = doRenew(durationMillis, threadId);
             if (ret) {
-                setTimeout(e, durationMillis, threadId);
+                doRenewSchedule(e, durationMillis, threadId);
             } else {
-                clearTimeout(true);
+                clearRenewSchedule(true);
             }
         }, durationMillis / 3, TimeUnit.MILLISECONDS);
 
         e.setTimeout(timeout);
     }
 
-    private void clearTimeout(boolean force) {
-        RenewEntry entry = renewEntries.get(lockName);
+    private void clearRenewSchedule(boolean force) {
+        LockRenewHolder entry = lockRenewHolders.get(lockName);
         if (entry != null) {
             long count = entry.decrease();
 
             if (force || count == 0) {
-                renewEntries.remove(lockName);
+                lockRenewHolders.remove(lockName);
                 Timeout timeout = entry.getTimeout();
                 if (!timeout.isCancelled()) {
                     timeout.cancel();
@@ -241,7 +239,7 @@ public abstract class AbstractLock implements Lock {
     public void unlock() {
         boolean ret = doUnLock(Thread.currentThread().getId());
         if (ret) {
-            clearTimeout(false);
+            clearRenewSchedule(false);
         }
     }
 
@@ -249,7 +247,7 @@ public abstract class AbstractLock implements Lock {
      * e.g. 5b978978ed054715b9b0bc0217278329:78
      */
     protected String getLockEntry(long threadId) {
-        return instanceId + ":" + threadId;
+        return clientId + ":" + threadId;
     }
 
     /**

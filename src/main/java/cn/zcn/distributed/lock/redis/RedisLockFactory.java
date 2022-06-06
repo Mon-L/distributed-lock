@@ -1,27 +1,24 @@
 package cn.zcn.distributed.lock.redis;
 
-import cn.zcn.distributed.lock.Config;
-import cn.zcn.distributed.lock.DistributedLockCreator;
-import cn.zcn.distributed.lock.InstanceId;
+import cn.zcn.distributed.lock.LockFactory;
+import cn.zcn.distributed.lock.ClientId;
 import cn.zcn.distributed.lock.Lock;
 import cn.zcn.distributed.lock.subscription.LockSubscription;
 import io.netty.util.HashedWheelTimer;
 import io.netty.util.Timer;
 
-public class RedisDistributedLockCreator implements DistributedLockCreator {
+public class RedisLockFactory implements LockFactory {
 
     private volatile boolean running;
     private final Timer timer;
-    private final Config config;
     private final LockSubscription lockSubscription;
     private final RedisCommandFactory redisCommandFactory;
     private final RedisSubscriptionService redisSubscriptionService;
 
-    public RedisDistributedLockCreator(Config config, RedisCommandFactory redisCommandFactory, boolean isBlocking) {
-        this.config = config;
+    public RedisLockFactory(RedisCommandFactory redisCommandFactory, boolean isBlocking) {
         this.timer = new HashedWheelTimer();
         this.redisCommandFactory = redisCommandFactory;
-        this.redisSubscriptionService = new RedisSubscriptionService(config, redisCommandFactory, timer, isBlocking);
+        this.redisSubscriptionService = new RedisSubscriptionService(redisCommandFactory, isBlocking);
         this.lockSubscription = new LockSubscription(redisSubscriptionService);
     }
 
@@ -35,7 +32,7 @@ public class RedisDistributedLockCreator implements DistributedLockCreator {
 
     @Override
     public Lock getLock(String name) {
-        return new RedisLock(name, InstanceId.VALUE, timer, config, lockSubscription, redisCommandFactory);
+        return new RedisLock(name, ClientId.VALUE, timer, lockSubscription, redisCommandFactory);
     }
 
     @Override

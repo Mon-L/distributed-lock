@@ -1,7 +1,6 @@
 package cn.zcn.distributed.lock.redis;
 
-import cn.zcn.distributed.lock.Config;
-import cn.zcn.distributed.lock.InstanceId;
+import cn.zcn.distributed.lock.ClientId;
 import cn.zcn.distributed.lock.subscription.LockSubscription;
 import cn.zcn.distributed.lock.test.redis.RedisCommandFactoryExtensions;
 import io.netty.util.HashedWheelTimer;
@@ -20,22 +19,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 public class RedisLockTest {
 
-    private Config config;
     private Timer timer;
-
     private RedisLock redisLock;
     private RedisSubscriptionService subscriptionService;
 
-
     static Stream<Arguments> testParams() {
         return Stream.of(
-                Arguments.of(RedisCommandFactoryExtensions.jedisPoolCommandFactory, true)
+                Arguments.of(RedisCommandFactoryExtensions.jedisPoolCommandFactory, true),
+                Arguments.of(RedisCommandFactoryExtensions.lettuceCommandFactory, true)
         );
     }
 
     @BeforeEach
     void beforeEach() {
-        config = Config.DEFAULT_CONFIG;
         timer = new HashedWheelTimer();
     }
 
@@ -46,10 +42,10 @@ public class RedisLockTest {
     }
 
     private void initLock(String lock, RedisCommandFactory commandFactory, boolean blocking) {
-        subscriptionService = new RedisSubscriptionService(config, commandFactory, timer, blocking);
+        subscriptionService = new RedisSubscriptionService(commandFactory, blocking);
         subscriptionService.start();
 
-        redisLock = new RedisLock(lock, InstanceId.VALUE, timer, config, new LockSubscription(subscriptionService), commandFactory);
+        redisLock = new RedisLock(lock, ClientId.VALUE, timer, new LockSubscription(subscriptionService), commandFactory);
     }
 
     @ParameterizedTest

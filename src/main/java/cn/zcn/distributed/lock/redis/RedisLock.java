@@ -1,7 +1,6 @@
 package cn.zcn.distributed.lock.redis;
 
 import cn.zcn.distributed.lock.AbstractLock;
-import cn.zcn.distributed.lock.Config;
 import cn.zcn.distributed.lock.subscription.LockSubscription;
 import io.netty.util.Timer;
 
@@ -13,8 +12,8 @@ class RedisLock extends AbstractLock {
 
     private final RedisCommandFactory commandFactory;
 
-    public RedisLock(String lock, String instanceId, Timer timer, Config config, LockSubscription lockSubscription, RedisCommandFactory commandFactory) {
-        super(lock, instanceId, timer, config, lockSubscription);
+    public RedisLock(String lock, String clientId, Timer timer, LockSubscription lockSubscription, RedisCommandFactory commandFactory) {
+        super(lock, clientId, timer, lockSubscription);
         this.commandFactory = commandFactory;
     }
 

@@ -1,7 +1,7 @@
 package cn.zcn.distributed.lock;
 
 import cn.zcn.distributed.lock.redis.RedisCommandFactory;
-import cn.zcn.distributed.lock.redis.RedisDistributedLockCreator;
+import cn.zcn.distributed.lock.redis.RedisLockFactory;
 import cn.zcn.distributed.lock.redis.jedis.JedisPoolCommandFactory;
 import cn.zcn.distributed.lock.redis.jedis.UnifiedJedisCommandFactory;
 import redis.clients.jedis.JedisCluster;
@@ -12,7 +12,6 @@ import java.util.function.Supplier;
 
 class JedisDistributedLockClientBuilder implements DistributedLockClientBuilder {
 
-    private Config config = Config.DEFAULT_CONFIG;
     private RedisCommandFactory redisCommandFactory;
 
     public JedisDistributedLockClientBuilder withPool(Supplier<JedisPool> supplier) {
@@ -31,20 +30,15 @@ class JedisDistributedLockClientBuilder implements DistributedLockClientBuilder 
     }
 
     @Override
-    public JedisDistributedLockClientBuilder withConfig(Config config) {
-        this.config = config;
-        return this;
-    }
-
-    @Override
     public DistributedLockClient build() {
         if (redisCommandFactory == null) {
             throw new IllegalStateException("Must config jedis instance.");
         }
 
-        RedisDistributedLockCreator redisDistributedLockCreator = new RedisDistributedLockCreator(config, redisCommandFactory, true);
-        redisDistributedLockCreator.start();
+        RedisLockFactory lockFactory = new RedisLockFactory(redisCommandFactory, true);
+        lockFactory.start();
+        lockFactory.registerShutdownHook();
 
-        return new DistributedLockClient(redisDistributedLockCreator);
+        return new DistributedLockClient(lockFactory);
     }
 }

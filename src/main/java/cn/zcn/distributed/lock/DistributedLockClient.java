@@ -10,17 +10,13 @@ public class DistributedLockClient {
         return new LettuceDistributedLockClientBuilder();
     }
 
-    private final DistributedLockCreator lockCreatorImpl;
+    private final LockFactory lockFactory;
 
-    DistributedLockClient(DistributedLockCreator distributedLockCreatorImpl) {
-        this.lockCreatorImpl = distributedLockCreatorImpl;
+    DistributedLockClient(LockFactory lockFactoryImpl) {
+        this.lockFactory = lockFactoryImpl;
     }
 
     public Lock getLock(String name) {
-        return lockCreatorImpl.getLock(name);
-    }
-
-    public void shutdown() {
-        lockCreatorImpl.shutdown();
+        return lockFactory.getLock(name);
     }
 }

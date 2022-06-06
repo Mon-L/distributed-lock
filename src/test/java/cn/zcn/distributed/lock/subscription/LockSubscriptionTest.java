@@ -35,11 +35,11 @@ public class LockSubscriptionTest {
         Mockito.when(lockSubscriptionService.subscribe(Mockito.any(), Mockito.any())).thenReturn(subscriptionPromise);
         subscriptionPromise.complete(null);
 
-        CompletableFuture<LockSubscriptionEntry> promise = lockSubscription.subscribe(lockName);
-        LockSubscriptionEntry entry = promise.get();
+        CompletableFuture<LockSubscriptionHolder> promise = lockSubscription.subscribe(lockName);
+        LockSubscriptionHolder holder = promise.get();
 
-        assertThat(entry.getPromise().isDone()).isTrue();
-        assertThat(entry.getCount()).isEqualTo(1);
+        assertThat(holder.getPromise().isDone()).isTrue();
+        assertThat(holder.getCount()).isEqualTo(1);
     }
 
     @Test
@@ -49,7 +49,7 @@ public class LockSubscriptionTest {
 
         int threadNum = 5, iterations = 20;
         CountDownLatch latch = new CountDownLatch(threadNum * 20);
-        List<CompletableFuture<LockSubscriptionEntry>> promises = Collections.synchronizedList(new ArrayList<>());
+        List<CompletableFuture<LockSubscriptionHolder>> promises = Collections.synchronizedList(new ArrayList<>());
         asyncRun(threadNum, () -> {
             for (int j = 0; j < iterations; j++) {
                 promises.add(lockSubscription.subscribe(lockName));
@@ -66,7 +66,7 @@ public class LockSubscriptionTest {
         //订阅 channel 成功
         subscriptionPromise.complete(null);
 
-        LockSubscriptionEntry entry;
+        LockSubscriptionHolder entry;
         try {
             entry = promises.get(0).get();
         } catch (InterruptedException | ExecutionException e) {
@@ -88,11 +88,11 @@ public class LockSubscriptionTest {
         Mockito.when(lockSubscriptionService.subscribe(Mockito.any(), Mockito.any())).thenReturn(subscriptionPromise);
         Mockito.when(lockSubscriptionService.unsubscribe(Mockito.anyString())).thenReturn(unsubscriptionPromise);
 
-        CompletableFuture<LockSubscriptionEntry> firstPromise = lockSubscription.subscribe(lockName);
+        CompletableFuture<LockSubscriptionHolder> firstPromise = lockSubscription.subscribe(lockName);
 
         int threadNum = 5, iterations = 20;
         CountDownLatch latch = new CountDownLatch(threadNum * 20);
-        List<CompletableFuture<LockSubscriptionEntry>> promises = Collections.synchronizedList(new ArrayList<>());
+        List<CompletableFuture<LockSubscriptionHolder>> promises = Collections.synchronizedList(new ArrayList<>());
         asyncRun(threadNum, () -> {
             for (int j = 0; j < iterations; j++) {
                 promises.add(lockSubscription.subscribe(lockName));
@@ -112,7 +112,7 @@ public class LockSubscriptionTest {
         //随后订阅 channel 成功
         subscriptionPromise.complete(null);
 
-        LockSubscriptionEntry entry;
+        LockSubscriptionHolder entry;
         try {
             entry = promises.get(0).get();
         } catch (InterruptedException | ExecutionException e) {
