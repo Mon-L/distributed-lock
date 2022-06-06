@@ -5,7 +5,6 @@ import cn.zcn.distributed.lock.Config;
 import cn.zcn.distributed.lock.subscription.LockSubscription;
 import io.netty.util.Timer;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -88,7 +87,7 @@ class RedisLock extends AbstractLock {
         Long ret = eval(
                 script,
                 Collections.singletonList(lockName.getBytes()),
-                String.valueOf(LockSubscription.UNLOCK_MESSAGE).getBytes(), getLockEntry(threadId).getBytes()
+                LockSubscription.UNLOCK_MESSAGE, getLockEntry(threadId).getBytes()
         );
 
         return ret != null && ret == 1;

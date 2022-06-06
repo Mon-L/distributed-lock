@@ -1,12 +1,15 @@
 package cn.zcn.distributed.lock.subscription;
 
+import cn.zcn.distributed.lock.LongEncoder;
+
+import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 public class LockSubscription {
 
-    public static final Long UNLOCK_MESSAGE = 0L;
+    public static final byte[] UNLOCK_MESSAGE = LongEncoder.encode(0L);
 
     private final LockSubscriptionService subscriptionService;
     private final ConcurrentMap<String, LockSubscriptionEntry> entries = new ConcurrentHashMap<>();
@@ -88,8 +91,7 @@ public class LockSubscription {
             }
 
             if (message instanceof byte[]) {
-                String str = new String((byte[]) message);
-                if (UNLOCK_MESSAGE.equals(Long.valueOf(str))) {
+                if (Arrays.equals((byte[]) message, UNLOCK_MESSAGE)) {
                     lockSubscriptionEntry.getUnLockLatch().release();
                 }
             }
