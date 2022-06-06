@@ -40,6 +40,7 @@ public abstract class AbstractLock implements Lock {
 
     private static final Map<String, RenewEntry> renewEntries = new ConcurrentHashMap<>();
     private static final String LOCK_PREFIX = "-lock-";
+    private static final int DEFAULT_LOCK_DURATION = 20;
 
     private final Timer timer;
     private final LockSubscription lockSubscription;
@@ -67,6 +68,11 @@ public abstract class AbstractLock implements Lock {
         }, config.getTimeout(), TimeUnit.MILLISECONDS);
 
         future.whenComplete((r, e) -> task.cancel());
+    }
+
+    @Override
+    public void lock() throws InterruptedException {
+        lock(DEFAULT_LOCK_DURATION, TimeUnit.SECONDS);
     }
 
     @Override

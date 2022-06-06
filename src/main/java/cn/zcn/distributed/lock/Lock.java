@@ -5,6 +5,13 @@ import java.util.concurrent.TimeUnit;
 public interface Lock {
 
     /**
+     * 申请一个锁，使用默认持续时间
+     *
+     * @throws InterruptedException 中断异常
+     */
+    void lock() throws InterruptedException;
+
+    /**
      * 申请一个锁，锁的持续时间为 {@code duration}。阻塞当前线程，直到锁申请成功，可被中断
      *
      * @param duration         期望申请的锁的持续时间

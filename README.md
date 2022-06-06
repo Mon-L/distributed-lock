@@ -39,3 +39,5 @@ lock.lock(10, TimeUnit.SECONDS);
 lock.unlock();
 
 ```
+
+**该项目仅用于学习交流**
