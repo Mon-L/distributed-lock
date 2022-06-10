@@ -59,8 +59,7 @@ public class RedisSubscriptionService implements LockSubscriptionService {
     }
 
     public long getSubscribedChannels() {
-        RedisSubscription redisSubscription = subscriber.getRedisSubscription();
-        return redisSubscription != null ? redisSubscription.getSubscribedChannels() : 0;
+        return subscriber.getSubscribedChannels();
     }
 
     private void tryListen() {
@@ -73,7 +72,7 @@ public class RedisSubscriptionService implements LockSubscriptionService {
                 CompletableFuture<Void> initPromise = subscriber.init();
 
                 try {
-                    initPromise.get(3, TimeUnit.SECONDS);
+                    initPromise.get(5, TimeUnit.SECONDS);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 } catch (ExecutionException e) {
@@ -102,14 +101,11 @@ public class RedisSubscriptionService implements LockSubscriptionService {
         });
 
         try {
-            if (curState == NOT_LISTEN) {
-                subscriber.addSubscriptionPromise(channelHolder, newPromise);
-            }
+            subscriber.addSubscriptionPromise(channelHolder, newPromise);
 
             tryListen();
 
             if (curState == LISTENING) {
-                subscriber.addSubscriptionPromise(channelHolder, newPromise);
                 subscriber.doSubscribe(channelHolder.val);
             }
         } catch (Throwable t) {
@@ -179,13 +175,14 @@ public class RedisSubscriptionService implements LockSubscriptionService {
 
     private class BlockingSubscriber implements RedisSubscriptionListener {
 
-        protected RedisSubscription redisSubscription;
         private final RedisCommandFactory commandFactory;
         private final LockMessageListener messageListener;
-        private volatile CompletableFuture<Void> initPromise;
         private final ExecutorService executor = Executors.newSingleThreadExecutor();
         private final Map<ByteArrayHolder, CompletableFuture<Void>> subscriptionPromises = new ConcurrentHashMap<>();
         private final Map<ByteArrayHolder, CompletableFuture<Void>> unsubscriptionPromises = new ConcurrentHashMap<>();
+
+        private volatile CompletableFuture<Void> initPromise;
+        protected volatile RedisSubscription redisSubscription;
 
         private BlockingSubscriber(RedisCommandFactory commandFactory, LockMessageListener messageListener) {
             this.commandFactory = commandFactory;
@@ -233,8 +230,8 @@ public class RedisSubscriptionService implements LockSubscriptionService {
             unsubscriptionPromises.remove(channel, promise);
         }
 
-        private RedisSubscription getRedisSubscription() {
-            return redisSubscription;
+        private long getSubscribedChannels() {
+            return redisSubscription == null ? 0 : redisSubscription.getSubscribedChannels();
         }
 
         private CompletableFuture<Void> init() {

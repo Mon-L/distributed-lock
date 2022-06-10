@@ -17,7 +17,7 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public abstract class AbstractLock implements Lock {
 
-    private static class LockRenewHolder {
+    private static class RenewLockHolder {
         private final AtomicLong count = new AtomicLong(0);
         private volatile Timeout timeout;
 
@@ -38,7 +38,7 @@ public abstract class AbstractLock implements Lock {
         }
     }
 
-    private static final Map<String, LockRenewHolder> lockRenewHolders = new ConcurrentHashMap<>();
+    private static final Map<String, RenewLockHolder> lockRenewHolders = new ConcurrentHashMap<>();
     private static final String LOCK_PREFIX = "distributed-lock:";
     private static final int DEFAULT_LOCK_DURATION = 20;
 
@@ -196,18 +196,18 @@ public abstract class AbstractLock implements Lock {
     }
 
     private void startRenewScheduleIfNeeded(long durationMillis, long threadId) {
-        LockRenewHolder lockRenewHolder = new LockRenewHolder();
-        LockRenewHolder oldEntry = lockRenewHolders.putIfAbsent(lockName, lockRenewHolder);
+        RenewLockHolder renewLockHolder = new RenewLockHolder();
+        RenewLockHolder oldEntry = lockRenewHolders.putIfAbsent(lockName, renewLockHolder);
 
         if (oldEntry != null) {
             oldEntry.increase();
         } else {
-            lockRenewHolder.increase();
-            doRenewSchedule(lockRenewHolder, durationMillis, threadId);
+            renewLockHolder.increase();
+            doRenewSchedule(renewLockHolder, durationMillis, threadId);
         }
     }
 
-    private void doRenewSchedule(LockRenewHolder e, long durationMillis, long threadId) {
+    private void doRenewSchedule(RenewLockHolder e, long durationMillis, long threadId) {
         Timeout timeout = timer.newTimeout(taskTimeout -> {
             boolean ret = doRenew(durationMillis, threadId);
             if (ret) {
@@ -221,7 +221,7 @@ public abstract class AbstractLock implements Lock {
     }
 
     private void clearRenewSchedule(boolean force) {
-        LockRenewHolder entry = lockRenewHolders.get(lockName);
+        RenewLockHolder entry = lockRenewHolders.get(lockName);
         if (entry != null) {
             long count = entry.decrease();
 
