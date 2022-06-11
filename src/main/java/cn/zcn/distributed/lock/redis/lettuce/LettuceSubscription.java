@@ -1,21 +1,20 @@
 package cn.zcn.distributed.lock.redis.lettuce;
 
 import cn.zcn.distributed.lock.redis.AbstractRedisSubscription;
-import cn.zcn.distributed.lock.redis.RedisSubscription;
 import cn.zcn.distributed.lock.redis.RedisSubscriptionListener;
 import io.lettuce.core.pubsub.RedisPubSubAdapter;
 import io.lettuce.core.pubsub.StatefulRedisPubSubConnection;
-import io.lettuce.core.pubsub.api.sync.RedisPubSubCommands;
+import io.lettuce.core.pubsub.api.async.RedisPubSubAsyncCommands;
 
 class LettuceSubscription extends AbstractRedisSubscription {
 
     private LettucePubSubAdapter lettucePubSubAdapter;
-    private final RedisPubSubCommands<byte[], byte[]> pubSubCommands;
+    private final RedisPubSubAsyncCommands<byte[], byte[]> pubSubCommands;
     private final StatefulRedisPubSubConnection<byte[], byte[]> connection;
 
     public LettuceSubscription(StatefulRedisPubSubConnection<byte[], byte[]> connection) {
         this.connection = connection;
-        this.pubSubCommands = this.connection.sync();
+        this.pubSubCommands = this.connection.async();
     }
 
     @Override

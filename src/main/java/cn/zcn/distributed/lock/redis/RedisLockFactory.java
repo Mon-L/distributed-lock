@@ -1,8 +1,8 @@
 package cn.zcn.distributed.lock.redis;
 
-import cn.zcn.distributed.lock.LockFactory;
 import cn.zcn.distributed.lock.ClientId;
 import cn.zcn.distributed.lock.Lock;
+import cn.zcn.distributed.lock.LockFactory;
 import cn.zcn.distributed.lock.subscription.LockSubscription;
 import io.netty.util.HashedWheelTimer;
 import io.netty.util.Timer;
@@ -33,6 +33,11 @@ public class RedisLockFactory implements LockFactory {
     @Override
     public Lock getLock(String name) {
         return new RedisLock(name, ClientId.VALUE, timer, lockSubscription, redisCommandFactory);
+    }
+
+    @Override
+    public Lock getFairLock(String name) {
+        return new RedisFairLock(name, ClientId.VALUE, timer, lockSubscription, redisCommandFactory);
     }
 
     @Override

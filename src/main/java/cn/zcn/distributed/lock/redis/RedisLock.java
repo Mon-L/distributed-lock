@@ -23,7 +23,7 @@ class RedisLock extends AbstractLock {
         String script = "return redis.call('hexists', KEYS[1], ARGV[1])";
 
         Long ret = eval(script,
-                Collections.singletonList(lockName.getBytes()),
+                Collections.singletonList(lockEntryName.getBytes()),
                 getLockEntry(threadId).getBytes()
         );
 
@@ -45,7 +45,7 @@ class RedisLock extends AbstractLock {
                 "return redis.call('pttl', KEYS[1]);";
 
         return eval(script,
-                Collections.singletonList(lockName.getBytes()),
+                Collections.singletonList(lockEntryName.getBytes()),
                 String.valueOf(durationMillis).getBytes(),
                 getLockEntry(threadId).getBytes()
         );
@@ -60,7 +60,7 @@ class RedisLock extends AbstractLock {
                 "return 0;";
 
         Long ret = eval(script,
-                Collections.singletonList(lockName.getBytes()),
+                Collections.singletonList(lockEntryName.getBytes()),
                 String.valueOf(durationMillis).getBytes(),
                 getLockEntry(threadId).getBytes()
         );
@@ -85,14 +85,14 @@ class RedisLock extends AbstractLock {
 
         Long ret = eval(
                 script,
-                Collections.singletonList(lockName.getBytes()),
+                Collections.singletonList(lockEntryName.getBytes()),
                 LockSubscription.UNLOCK_MESSAGE, getLockEntry(threadId).getBytes()
         );
 
         return ret != null && ret == 1;
     }
 
-    private Long eval(String script, List<byte[]> keys, byte[]... args) {
+    protected Long eval(String script, List<byte[]> keys, byte[]... args) {
         return (Long) commandFactory.eval(script.getBytes(), keys, Arrays.asList(args));
     }
 }

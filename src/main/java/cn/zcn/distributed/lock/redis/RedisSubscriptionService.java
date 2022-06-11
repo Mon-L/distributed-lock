@@ -16,6 +16,11 @@ public class RedisSubscriptionService implements LockSubscriptionService {
     private static final int NOT_LISTEN = -1;
 
     /**
+     * 准备监听channel
+     */
+    private static final int PREPARE_LISTEN = 0;
+
+    /**
      * 正在监听channel
      */
     private static final int LISTENING = 1;
@@ -69,17 +74,7 @@ public class RedisSubscriptionService implements LockSubscriptionService {
 
         if (running.get()) {
             if (state <= 0 && channelListeners.size() > 0) {
-                CompletableFuture<Void> initPromise = subscriber.init();
-
-                try {
-                    initPromise.get(5, TimeUnit.SECONDS);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                } catch (ExecutionException e) {
-                    throw new CompletionException(e.getCause());
-                } catch (TimeoutException e) {
-                    throw new IllegalStateException("Subscription registration timeout exceeded.", e);
-                }
+                subscriber.init();
             }
         }
     }
@@ -105,8 +100,15 @@ public class RedisSubscriptionService implements LockSubscriptionService {
 
             tryListen();
 
-            if (curState == LISTENING) {
-                subscriber.doSubscribe(channelHolder.val);
+            if (curState != NOT_LISTEN) {
+                subscriber.initPromise.whenComplete((r, t) -> {
+                    if (t == null) {
+                        subscriber.doSubscribe(channelHolder.val);
+                        return;
+                    }
+
+                    newPromise.completeExceptionally(t);
+                });
             }
         } catch (Throwable t) {
             newPromise.completeExceptionally(t);
@@ -234,14 +236,14 @@ public class RedisSubscriptionService implements LockSubscriptionService {
             return redisSubscription == null ? 0 : redisSubscription.getSubscribedChannels();
         }
 
-        private CompletableFuture<Void> init() {
+        private void init() {
             if (state != NOT_LISTEN) {
-                return initPromise;
+                return;
             }
 
             synchronized (this) {
                 if (state != NOT_LISTEN) {
-                    return initPromise;
+                    return;
                 }
 
                 initPromise = new CompletableFuture<>();
@@ -251,6 +253,7 @@ public class RedisSubscriptionService implements LockSubscriptionService {
                     }
                 });
 
+                state = PREPARE_LISTEN;
                 Set<ByteArrayHolder> channels = new HashSet<>(channelListeners.keySet());
                 redisSubscription = commandFactory.getSubscription();
 
@@ -259,8 +262,6 @@ public class RedisSubscriptionService implements LockSubscriptionService {
                 } catch (Exception e) {
                     handleSubscriptionException(e);
                 }
-
-                return initPromise;
             }
         }
 

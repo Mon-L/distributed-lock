@@ -10,5 +10,7 @@ public interface LockFactory {
 
     Lock getLock(String name);
 
+    Lock getFairLock(String name);
+
     void shutdown();
 }
