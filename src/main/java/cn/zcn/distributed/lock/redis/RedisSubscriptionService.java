@@ -2,6 +2,8 @@ package cn.zcn.distributed.lock.redis;
 
 import cn.zcn.distributed.lock.subscription.LockMessageListener;
 import cn.zcn.distributed.lock.subscription.LockSubscriptionService;
+import io.netty.util.Timeout;
+import io.netty.util.Timer;
 
 import java.nio.charset.StandardCharsets;
 import java.util.*;
@@ -35,13 +37,15 @@ public class RedisSubscriptionService implements LockSubscriptionService {
      */
     private volatile int state = NOT_LISTEN;
 
+    private final Timer timer;
     private final RedisCommandFactory commandFactory;
     private final Map<ByteArrayHolder, LockMessageListener> channelListeners = new ConcurrentHashMap<>();
     private final boolean isBlocking;
 
     private BlockingSubscriber subscriber;
 
-    public RedisSubscriptionService(RedisCommandFactory commandFactory, boolean isBlocking) {
+    public RedisSubscriptionService(Timer timer, RedisCommandFactory commandFactory, boolean isBlocking) {
+        this.timer = timer;
         this.isBlocking = isBlocking;
         this.commandFactory = commandFactory;
     }
@@ -68,14 +72,12 @@ public class RedisSubscriptionService implements LockSubscriptionService {
     }
 
     private void tryListen() {
-        if (state == LISTENING) {
+        if (!running.get()) {
             return;
         }
 
-        if (running.get()) {
-            if (state <= 0 && channelListeners.size() > 0) {
-                subscriber.init();
-            }
+        if (channelListeners.size() > 0) {
+            subscriber.init();
         }
     }
 
@@ -85,29 +87,41 @@ public class RedisSubscriptionService implements LockSubscriptionService {
         CompletableFuture<Void> newPromise = new CompletableFuture<>();
 
         int curState = state;
-        channelListeners.put(channelHolder, listener);
 
-        newPromise.whenComplete((r, t) -> {
-            //订阅异常或超时
-            if (t != null) {
-                channelListeners.remove(channelHolder);
-                subscriber.removeSubscriptionPromise(channelHolder, newPromise);
-            }
-        });
+        channelListeners.put(channelHolder, listener);
+        subscriber.addSubscriptionPromise(channelHolder, newPromise);
 
         try {
-            subscriber.addSubscriptionPromise(channelHolder, newPromise);
+            Timeout timeout = timeout(newPromise);
+
+            newPromise.whenComplete((r, t) -> {
+                timeout.cancel();
+
+                //订阅异常
+                if (t != null) {
+                    channelListeners.remove(channelHolder);
+                    subscriber.removeSubscriptionPromise(channelHolder, newPromise);
+                }
+            });
 
             tryListen();
 
-            if (curState != NOT_LISTEN) {
+            if (curState == LISTENING || curState == PREPARE_LISTEN) {
                 subscriber.initPromise.whenComplete((r, t) -> {
-                    if (t == null) {
-                        subscriber.doSubscribe(channelHolder.val);
+                    if (newPromise.isDone()) {
                         return;
                     }
 
-                    newPromise.completeExceptionally(t);
+                    if (t != null) {
+                        newPromise.completeExceptionally(t);
+                        return;
+                    }
+
+                    try {
+                        subscriber.doSubscribe(channelHolder.val);
+                    } catch (Exception e) {
+                        newPromise.completeExceptionally(e);
+                    }
                 });
             }
         } catch (Throwable t) {
@@ -117,26 +131,46 @@ public class RedisSubscriptionService implements LockSubscriptionService {
         return newPromise;
     }
 
+    private Timeout timeout(CompletableFuture<Void> promise) {
+        return timer.newTimeout(timeout -> {
+            if (!promise.isDone()) {
+                promise.completeExceptionally(new TimeoutException("Subscribe/UnSubscribe channel timeout."));
+            }
+        }, 5, TimeUnit.SECONDS);
+    }
+
     @Override
     public CompletableFuture<Void> unsubscribe(String channel) {
         ByteArrayHolder channelHolder = new ByteArrayHolder(channel);
-
-        int curState = state;
         channelListeners.remove(channelHolder);
 
-        if (curState == NOT_LISTEN) {
+        if (state == NOT_LISTEN) {
             return CompletableFuture.completedFuture(null);
         }
 
         CompletableFuture<Void> newPromise = new CompletableFuture<>();
+        Timeout timeout = timeout(newPromise);
 
-        try {
-            subscriber.addUnsubscriptionPromise(channelHolder, newPromise);
-            subscriber.doUnsubscribe(channelHolder.val);
-        } catch (Exception e) {
-            subscriber.removeUnsubscriptionPromise(channelHolder, newPromise);
-            newPromise.completeExceptionally(e);
-        }
+        newPromise.whenComplete((r, t) -> timeout.cancel());
+
+        subscriber.initPromise.whenComplete((r, t) -> {
+            if (newPromise.isDone()) {
+                return;
+            }
+
+            if (t != null) {
+                newPromise.completeExceptionally(t);
+                return;
+            }
+
+            try {
+                subscriber.addUnsubscriptionPromise(channelHolder, newPromise);
+                subscriber.doUnsubscribe(channelHolder.val);
+            } catch (Exception e) {
+                subscriber.removeUnsubscriptionPromise(channelHolder, newPromise);
+                newPromise.completeExceptionally(e);
+            }
+        });
 
         return newPromise;
     }
@@ -171,6 +205,7 @@ public class RedisSubscriptionService implements LockSubscriptionService {
 
         @Override
         protected void doSubscribe(RedisSubscriptionListener listener, byte[]... channel) {
+            redisSubscription = commandFactory.getSubscription();
             redisSubscription.subscribe(listener, channel);
         }
     }
@@ -246,22 +281,24 @@ public class RedisSubscriptionService implements LockSubscriptionService {
                     return;
                 }
 
-                initPromise = new CompletableFuture<>();
-                initPromise.whenComplete((r, t) -> {
-                    if (t == null) {
-                        state = LISTENING;
-                    }
-                });
-
                 state = PREPARE_LISTEN;
-                Set<ByteArrayHolder> channels = new HashSet<>(channelListeners.keySet());
-                redisSubscription = commandFactory.getSubscription();
+                initPromise = new CompletableFuture<>();
+            }
 
-                try {
-                    doSubscribe(this, unwrap(channels));
-                } catch (Exception e) {
-                    handleSubscriptionException(e);
+            initPromise.whenComplete((r, t) -> {
+                if (t != null) {
+                    state = NOT_LISTEN;
+                    return;
                 }
+
+                state = LISTENING;
+            });
+
+            try {
+                Set<ByteArrayHolder> channels = new HashSet<>(channelListeners.keySet());
+                doSubscribe(this, unwrap(channels));
+            } catch (Exception e) {
+                handleSubscriptionException(e);
             }
         }
 
@@ -282,6 +319,7 @@ public class RedisSubscriptionService implements LockSubscriptionService {
                 }
 
                 try {
+                    redisSubscription = commandFactory.getSubscription();
                     redisSubscription.subscribe(listener, channel);
                     state = NOT_LISTEN;
                 } catch (Exception e) {

@@ -18,7 +18,7 @@ public class RedisLockFactory implements LockFactory {
     public RedisLockFactory(RedisCommandFactory redisCommandFactory, boolean isBlocking) {
         this.timer = new HashedWheelTimer();
         this.redisCommandFactory = redisCommandFactory;
-        this.redisSubscriptionService = new RedisSubscriptionService(redisCommandFactory, isBlocking);
+        this.redisSubscriptionService = new RedisSubscriptionService(timer, redisCommandFactory, isBlocking);
         this.lockSubscription = new LockSubscription(redisSubscriptionService);
     }
 

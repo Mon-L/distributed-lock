@@ -42,7 +42,7 @@ public class RedisLockTest {
     }
 
     private void initLock(String lock, RedisCommandFactory commandFactory, boolean blocking) {
-        subscriptionService = new RedisSubscriptionService(commandFactory, blocking);
+        subscriptionService = new RedisSubscriptionService(timer, commandFactory, blocking);
         subscriptionService.start();
 
         redisLock = new RedisLock(lock, ClientId.VALUE, timer, new LockSubscription(subscriptionService), commandFactory);
@@ -57,6 +57,7 @@ public class RedisLockTest {
         redisLock.lock(3, TimeUnit.SECONDS);
 
         assertThat(System.currentTimeMillis() - startTime).isLessThan(400);
+        redisLock.unlock();
     }
 
     @ParameterizedTest
@@ -145,11 +146,12 @@ public class RedisLockTest {
         latch.await();
 
         long startTime = System.currentTimeMillis();
-        boolean locked = redisLock.tryLock(3, TimeUnit.SECONDS, 3, TimeUnit.SECONDS);
+        boolean locked = redisLock.tryLock(4, TimeUnit.SECONDS, 3, TimeUnit.SECONDS);
         long endTime = System.currentTimeMillis();
 
         assertThat(locked).isTrue();
         assertThat(endTime - startTime).isBetween(2900L, 3100L);
+        redisLock.unlock();
     }
 
     private static class UnsafeCounter {

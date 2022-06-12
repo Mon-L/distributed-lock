@@ -11,8 +11,10 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -20,12 +22,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class RedisFairLockTest {
 
     private Timer timer;
-    private RedisLock redisLock;
+    private RedisFairLock redisLock;
     private RedisSubscriptionService subscriptionService;
 
     static Stream<Arguments> testParams() {
         return Stream.of(
                 Arguments.of(RedisCommandFactoryExtensions.jedisPoolCommandFactory, true),
+                Arguments.of(RedisCommandFactoryExtensions.lettuceCommandFactory, false)
+        );
+    }
+
+    static Stream<Arguments> testOnlyLettuceParams() {
+        return Stream.of(
                 Arguments.of(RedisCommandFactoryExtensions.lettuceCommandFactory, false)
         );
     }
@@ -38,11 +46,10 @@ public class RedisFairLockTest {
     @AfterEach
     void afterEach() {
         subscriptionService.stop();
-        timer.stop();
     }
 
     private void initLock(String lock, RedisCommandFactory commandFactory, boolean blocking) {
-        subscriptionService = new RedisSubscriptionService(commandFactory, blocking);
+        subscriptionService = new RedisSubscriptionService(timer, commandFactory, blocking);
         subscriptionService.start();
 
         redisLock = new RedisFairLock(lock, ClientId.VALUE, timer, new LockSubscription(subscriptionService), commandFactory);
@@ -57,6 +64,7 @@ public class RedisFairLockTest {
         redisLock.lock(3, TimeUnit.SECONDS);
 
         assertThat(System.currentTimeMillis() - startTime).isLessThan(400);
+        redisLock.unlock();
     }
 
     @ParameterizedTest
@@ -132,15 +140,15 @@ public class RedisFairLockTest {
         new Thread(() -> {
             try {
                 redisLock.lock(3, TimeUnit.SECONDS);
-
                 latch.countDown();
                 TimeUnit.MILLISECONDS.sleep(2900);
-
                 redisLock.unlock();
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
         }).start();
+
+        TimeUnit.MILLISECONDS.sleep(20);
 
         latch.await();
 
@@ -150,6 +158,46 @@ public class RedisFairLockTest {
 
         assertThat(locked).isTrue();
         assertThat(endTime - startTime).isBetween(2900L, 3100L);
+
+        redisLock.unlock();
+    }
+
+    @ParameterizedTest
+    @MethodSource("testOnlyLettuceParams")
+    void testFariLockOrdering(RedisCommandFactory commandFactory, boolean blocking) throws InterruptedException {
+        initLock("ll", commandFactory, blocking);
+
+        final ConcurrentLinkedQueue<Thread> queue = new ConcurrentLinkedQueue<>();
+        final AtomicInteger lockedCounter = new AtomicInteger();
+
+        int threadNum = 5;
+        CountDownLatch latch = new CountDownLatch(threadNum);
+
+        for (int i = 0; i < threadNum; i++) {
+            Thread t1 = new Thread(() -> {
+                queue.add(Thread.currentThread());
+                try {
+                    redisLock.lock();
+
+                    Thread t = queue.poll();
+                    assertThat(t).isEqualTo(Thread.currentThread());
+
+                    Thread.sleep(1000);
+
+                    lockedCounter.incrementAndGet();
+                    redisLock.unlock();
+                    latch.countDown();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            });
+
+            Thread.sleep(10);
+            t1.start();
+        }
+
+        latch.await(10, TimeUnit.SECONDS);
+        assertThat(lockedCounter.get()).isEqualTo(threadNum);
     }
 
     private static class UnsafeCounter {
