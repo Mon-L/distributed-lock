@@ -8,6 +8,17 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+
+/**
+ * 非公平锁的 Redis 数据结构
+ * <p>
+ * 持有锁的对象(string):
+ * <pre>
+ * "distributed-lock:{lock}": {
+ *     "{client-id}:{thread-id}" : {count}
+ * }
+ * </pre>
+ */
 class RedisLock extends AbstractLock {
 
     private final RedisCommandFactory commandFactory;

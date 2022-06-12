@@ -8,6 +8,33 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * 公平锁的 Redis 数据结构
+ * <p>
+ * 持有锁的对象(string):
+ * <pre>
+ * "distributed-lock:{lock}": {
+ *     "{client-id}:{thread-id}" : {count}
+ * }
+ * </pre>
+ * <p>
+ * 竞争锁对象的队列(list):
+ * <pre>
+ * "distributed-lock:{lock}:queen": [
+ *     "{client-id}:{thread-id}"
+ * ]
+ * </pre>
+ * <p>
+ * 竞争锁的超时时间集合(zset):
+ * <pre>
+ * "distributed-lock:{lock}:timeout": [
+ *      {
+ *          value: {client-id}:{thread-id},
+ *          scope: timeout(millis)
+ *      }
+ * ]
+ * </pre>
+ */
 public class RedisFairLock extends RedisLock {
 
     private final String queenName;

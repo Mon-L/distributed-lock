@@ -32,7 +32,7 @@ public class RedisFairLockTest {
         );
     }
 
-    static Stream<Arguments> testOnlyLettuceParams() {
+    static Stream<Arguments> testLettuceParams() {
         return Stream.of(
                 Arguments.of(RedisCommandFactoryExtensions.lettuceCommandFactory, false)
         );
@@ -163,7 +163,7 @@ public class RedisFairLockTest {
     }
 
     @ParameterizedTest
-    @MethodSource("testOnlyLettuceParams")
+    @MethodSource("testLettuceParams")
     void testFariLockOrdering(RedisCommandFactory commandFactory, boolean blocking) throws InterruptedException {
         initLock("ll", commandFactory, blocking);
 
