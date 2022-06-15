@@ -42,8 +42,8 @@ public class RedisFairLock extends RedisLock {
 
     public RedisFairLock(String lock, String clientId, Timer timer, LockSubscription lockSubscription, RedisCommandFactory commandFactory) {
         super(lock, clientId, timer, lockSubscription, commandFactory);
-        queenName = LOCK_PREFIX + lockEntryName + ":queen";
-        timeoutSetName = LOCK_PREFIX + lockEntryName + ":timeout";
+        queenName = withLockPrefix(lock + ":queen");
+        timeoutSetName = withLockPrefix(lock + ":timeout");
     }
 
     @Override
@@ -106,7 +106,7 @@ public class RedisFairLock extends RedisLock {
         return eval(script,
                 keys,
                 String.valueOf(durationMillis).getBytes(),
-                getLockEntry(threadId).getBytes(),
+                getLockHolderEntry(threadId).getBytes(),
                 String.valueOf(DEFAULT_LOCK_DURATION).getBytes(),
                 String.valueOf(System.currentTimeMillis()).getBytes()
         );
@@ -153,14 +153,14 @@ public class RedisFairLock extends RedisLock {
         keys.add(lockEntryName.getBytes());
         keys.add(queenName.getBytes());
         keys.add(timeoutSetName.getBytes());
-        keys.add(lockName.getBytes());
+        keys.add(lockRawName.getBytes());
 
         Long ret = eval(
                 script,
                 keys,
-                LockSubscription.UNLOCK_MESSAGE,
+                RedisSubscriptionListener.UNLOCK_MESSAGE,
                 String.valueOf(DEFAULT_LOCK_DURATION).getBytes(),
-                getLockEntry(threadId).getBytes(),
+                getLockHolderEntry(threadId).getBytes(),
                 String.valueOf(System.currentTimeMillis()).getBytes()
         );
 
@@ -169,11 +169,11 @@ public class RedisFairLock extends RedisLock {
 
     @Override
     protected CompletableFuture<LockSubscriptionHolder> subscribe(long threadId) {
-        return lockSubscription.subscribe(lockName + ":" + clientId + ":" + threadId);
+        return lockSubscription.subscribe(lockRawName + ":" + clientId + ":" + threadId);
     }
 
     @Override
     protected void unsubscribe(LockSubscriptionHolder lockSubscriptionHolder, long threadId) {
-        lockSubscription.unsubscribe(lockSubscriptionHolder, lockName + ":" + clientId + ":" + threadId);
+        lockSubscription.unsubscribe(lockSubscriptionHolder, lockRawName + ":" + clientId + ":" + threadId);
     }
 }

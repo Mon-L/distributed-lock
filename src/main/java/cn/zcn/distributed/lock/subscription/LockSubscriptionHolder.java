@@ -2,37 +2,37 @@ package cn.zcn.distributed.lock.subscription;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class LockSubscriptionHolder {
 
     /**
      * 锁的订阅数量
      */
-    private volatile int count;
+    private final AtomicInteger count = new AtomicInteger(0);
+
+    /**
+     * 锁的订阅结果
+     */
+    private final CompletableFuture<LockSubscriptionHolder> promise = new CompletableFuture<>();
 
     /**
      * 锁的名称
      */
     private final String name;
 
-    /**
-     * 锁的订阅结果
-     */
-    private final CompletableFuture<LockSubscriptionHolder> promise;
-
     private final Semaphore unLockSemaphore = new Semaphore(0);
 
     public LockSubscriptionHolder(String name) {
         this.name = name;
-        this.promise = new CompletableFuture<>();
     }
 
     public void increment() {
-        ++count;
+        count.incrementAndGet();
     }
 
-    public int decrement() {
-        return --count;
+    public long decrement() {
+        return count.decrementAndGet();
     }
 
     public void complete(Throwable t) {
@@ -52,7 +52,7 @@ public class LockSubscriptionHolder {
     }
 
     public int getCount() {
-        return count;
+        return count.get();
     }
 
     @Override

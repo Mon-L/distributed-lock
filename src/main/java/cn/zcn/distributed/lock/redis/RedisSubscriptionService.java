@@ -1,6 +1,6 @@
 package cn.zcn.distributed.lock.redis;
 
-import cn.zcn.distributed.lock.subscription.LockMessageListener;
+import cn.zcn.distributed.lock.subscription.LockStatusListener;
 import cn.zcn.distributed.lock.subscription.LockSubscriptionService;
 import io.netty.util.Timeout;
 import io.netty.util.Timer;
@@ -13,22 +13,22 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class RedisSubscriptionService implements LockSubscriptionService {
 
     /**
-     * 没有监听任何channel
+     * 没有监听任何 channels
      */
     private static final int NOT_LISTEN = -1;
 
     /**
-     * 准备监听channel
+     * 准备监听 channels
      */
     private static final int PREPARE_LISTEN = 0;
 
     /**
-     * 正在监听channel
+     * 正在监听 channels
      */
     private static final int LISTENING = 1;
 
     /**
-     * redis订阅服务是否已经运行
+     * 订阅服务是否已启动
      */
     private final AtomicBoolean running = new AtomicBoolean(false);
 
@@ -39,7 +39,7 @@ public class RedisSubscriptionService implements LockSubscriptionService {
 
     private final Timer timer;
     private final RedisCommandFactory commandFactory;
-    private final Map<ByteArrayHolder, LockMessageListener> channelListeners = new ConcurrentHashMap<>();
+    private final Map<ByteArrayHolder, LockStatusListener> channelListeners = new ConcurrentHashMap<>();
     private final boolean isBlocking;
 
     private BlockingSubscriber subscriber;
@@ -53,7 +53,7 @@ public class RedisSubscriptionService implements LockSubscriptionService {
     @Override
     public void start() {
         if (running.compareAndSet(false, true)) {
-            DispatchLockMessageListener lockMessageListener = new DispatchLockMessageListener(channelListeners);
+            DispatchLockStatusListener lockMessageListener = new DispatchLockStatusListener(channelListeners);
 
             if (isBlocking) {
                 subscriber = new BlockingSubscriber(commandFactory, lockMessageListener);
@@ -82,7 +82,7 @@ public class RedisSubscriptionService implements LockSubscriptionService {
     }
 
     @Override
-    public CompletableFuture<Void> subscribe(String channel, LockMessageListener listener) {
+    public CompletableFuture<Void> subscribe(String channel, LockStatusListener listener) {
         ByteArrayHolder channelHolder = new ByteArrayHolder(channel);
         CompletableFuture<Void> newPromise = new CompletableFuture<>();
 
@@ -199,7 +199,7 @@ public class RedisSubscriptionService implements LockSubscriptionService {
 
     private class Subscriber extends BlockingSubscriber {
 
-        private Subscriber(RedisCommandFactory commandFactory, LockMessageListener messageListener) {
+        private Subscriber(RedisCommandFactory commandFactory, LockStatusListener messageListener) {
             super(commandFactory, messageListener);
         }
 
@@ -213,7 +213,7 @@ public class RedisSubscriptionService implements LockSubscriptionService {
     private class BlockingSubscriber implements RedisSubscriptionListener {
 
         private final RedisCommandFactory commandFactory;
-        private final LockMessageListener messageListener;
+        private final LockStatusListener messageListener;
         private final ExecutorService executor = Executors.newSingleThreadExecutor();
         private final Map<ByteArrayHolder, CompletableFuture<Void>> subscriptionPromises = new ConcurrentHashMap<>();
         private final Map<ByteArrayHolder, CompletableFuture<Void>> unsubscriptionPromises = new ConcurrentHashMap<>();
@@ -221,14 +221,16 @@ public class RedisSubscriptionService implements LockSubscriptionService {
         private volatile CompletableFuture<Void> initPromise;
         protected volatile RedisSubscription redisSubscription;
 
-        private BlockingSubscriber(RedisCommandFactory commandFactory, LockMessageListener messageListener) {
+        private BlockingSubscriber(RedisCommandFactory commandFactory, LockStatusListener messageListener) {
             this.commandFactory = commandFactory;
             this.messageListener = messageListener;
         }
 
         @Override
         public void onMessage(byte[] channel, byte[] message) {
-            messageListener.onMessage(new String(channel), message);
+            if (Arrays.equals(message, UNLOCK_MESSAGE)) {
+                messageListener.unlock(new String(channel), message);
+            }
         }
 
         @Override
@@ -281,24 +283,22 @@ public class RedisSubscriptionService implements LockSubscriptionService {
                     return;
                 }
 
-                state = PREPARE_LISTEN;
                 initPromise = new CompletableFuture<>();
-            }
+                initPromise.whenComplete((r, t) -> {
+                    if (t != null) {
+                        state = NOT_LISTEN;
+                        return;
+                    }
+                    state = LISTENING;
+                });
 
-            initPromise.whenComplete((r, t) -> {
-                if (t != null) {
-                    state = NOT_LISTEN;
-                    return;
+                try {
+                    Set<ByteArrayHolder> channels = new HashSet<>(channelListeners.keySet());
+                    state = PREPARE_LISTEN;
+                    doSubscribe(this, unwrap(channels));
+                } catch (Exception e) {
+                    handleSubscriptionException(e);
                 }
-
-                state = LISTENING;
-            });
-
-            try {
-                Set<ByteArrayHolder> channels = new HashSet<>(channelListeners.keySet());
-                doSubscribe(this, unwrap(channels));
-            } catch (Exception e) {
-                handleSubscriptionException(e);
             }
         }
 
@@ -360,19 +360,19 @@ public class RedisSubscriptionService implements LockSubscriptionService {
         }
     }
 
-    private static class DispatchLockMessageListener implements LockMessageListener {
+    private static class DispatchLockStatusListener implements LockStatusListener {
 
-        private final Map<ByteArrayHolder, LockMessageListener> listeners;
+        private final Map<ByteArrayHolder, LockStatusListener> listeners;
 
-        private DispatchLockMessageListener(Map<ByteArrayHolder, LockMessageListener> listeners) {
+        private DispatchLockStatusListener(Map<ByteArrayHolder, LockStatusListener> listeners) {
             this.listeners = listeners;
         }
 
         @Override
-        public void onMessage(String channel, Object message) {
-            LockMessageListener l = listeners.get(new ByteArrayHolder(channel));
+        public void unlock(String channel, Object message) {
+            LockStatusListener l = listeners.get(new ByteArrayHolder(channel));
             if (l != null) {
-                l.onMessage(channel, message);
+                l.unlock(channel, message);
             }
         }
     }

@@ -10,10 +10,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * 分布式锁的结构
- * -lock-{lock name} = {
- * {UUID}:{thread id} = {lock count}
- * }
+ * 分布式锁骨架
  */
 public abstract class AbstractLock implements Lock {
 
@@ -39,34 +36,39 @@ public abstract class AbstractLock implements Lock {
     }
 
     private static final Map<String, RenewLockHolder> lockRenewHolders = new ConcurrentHashMap<>();
-    protected static final String LOCK_PREFIX = "distributed-lock:";
+    private static final String LOCK_PREFIX = "distributed-lock:";
     protected static final int DEFAULT_LOCK_DURATION = 20;
 
     private final Timer timer;
     protected final LockSubscription lockSubscription;
-    protected final String lockName;
+
+    /**
+     * 分布式锁名
+     */
+    protected final String lockRawName;
+
+    /**
+     * {@code LOCK_PREFIX} + ":" + {@code lockRawName}
+     * e.g. distributed-lock:account
+     */
     protected final String lockEntryName;
+
+    /**
+     * 客户端 ID
+     */
     protected final String clientId;
 
     /**
      * @param lock     分布式锁的名称
-     * @param clientId UUID
+     * @param clientId 客户端ID
      * @param timer    定时器
      */
     public AbstractLock(String lock, String clientId, Timer timer, LockSubscription lockSubscription) {
-        this.lockName = lock;
-        this.lockEntryName = LOCK_PREFIX + lock;
+        this.lockRawName = lock;
+        this.lockEntryName = withLockPrefix(lock);
         this.clientId = clientId;
         this.timer = timer;
         this.lockSubscription = lockSubscription;
-    }
-
-    private void startTimeoutSchedule(CompletableFuture<?> promise) {
-        Timeout task = timer.newTimeout(t -> {
-            promise.completeExceptionally(new TimeoutException("Subscribe lock timeout."));
-        }, 3, TimeUnit.SECONDS);
-
-        promise.whenComplete((r, e) -> task.cancel());
     }
 
     @Override
@@ -97,9 +99,6 @@ public abstract class AbstractLock implements Lock {
         } catch (ExecutionException e) {
             throw new LockException("Unexpected exception while subscribe lock.", e.getCause());
         }
-
-        //监听是否订阅超时
-        startTimeoutSchedule(subscriptionPromise);
 
         try {
             while (true) {
@@ -221,6 +220,15 @@ public abstract class AbstractLock implements Lock {
         e.setTimeout(timeout);
     }
 
+    protected String withLockPrefix(String value) {
+        return LOCK_PREFIX + value;
+    }
+
+    /**
+     * 清除续锁的定时任务
+     *
+     * @param force ture, 强制清除定时任务; false, 如果当前没有任何线程还持有锁, 则清除定时任务。否则，不清除。
+     */
     private void clearRenewSchedule(boolean force) {
         RenewLockHolder entry = lockRenewHolders.get(lockEntryName);
         if (entry != null) {
@@ -246,41 +254,43 @@ public abstract class AbstractLock implements Lock {
 
     @Override
     public void unlock() {
-        boolean ret = doUnLock(Thread.currentThread().getId());
-        if (ret) {
+        boolean success = doUnLock(Thread.currentThread().getId());
+        if (success) {
+            //清除续锁的定时任务
             clearRenewSchedule(false);
         }
     }
 
-    /**
-     * e.g. 5b978978ed054715b9b0bc0217278329:78
-     */
-    protected String getLockEntry(long threadId) {
+    protected String getLockHolderEntry(long threadId) {
         return clientId + ":" + threadId;
     }
 
-    /**
-     * 判断锁是否被当前线程持有
-     */
     @Override
     public abstract boolean isHeldByCurrentThread();
 
     /**
-     * 申请锁，并返回锁的持续时间
+     * 请求锁
      *
-     * @return null, 获取锁成功； >= 0, 获取锁失败，返回锁的过期时间； < 0， 锁申请失败，但锁已过期。
+     * @param durationMillis 锁的持续时间
+     * @param threadId       当前线程ID
+     * @return null, 请求锁成功; >= 0, 获取锁失败, 返回当前锁的过期时间; < 0, 请求锁失败。
      */
     protected abstract Long doLock(long durationMillis, long threadId);
 
     /**
-     * 续锁
+     * 给分布式锁续期
      *
-     * @return true, 续锁成功； false， 续锁失败
+     * @param durationMillis 续期时长
+     * @param threadId       当前线程ID
+     * @return true, 续锁成功; false, 续锁失败
      */
     protected abstract boolean doRenew(long durationMillis, long threadId);
 
     /**
      * 释放锁
+     *
+     * @param threadId 当前线程ID
+     * @return true, 释放锁成功; false,释放锁失败
      */
     protected abstract boolean doUnLock(long threadId);
 }

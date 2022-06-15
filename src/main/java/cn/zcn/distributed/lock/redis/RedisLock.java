@@ -35,7 +35,7 @@ class RedisLock extends AbstractLock {
 
         Long ret = eval(script,
                 Collections.singletonList(lockEntryName.getBytes()),
-                getLockEntry(threadId).getBytes()
+                getLockHolderEntry(threadId).getBytes()
         );
 
         return ret != null && ret == 1;
@@ -58,7 +58,7 @@ class RedisLock extends AbstractLock {
         return eval(script,
                 Collections.singletonList(lockEntryName.getBytes()),
                 String.valueOf(durationMillis).getBytes(),
-                getLockEntry(threadId).getBytes()
+                getLockHolderEntry(threadId).getBytes()
         );
     }
 
@@ -73,7 +73,7 @@ class RedisLock extends AbstractLock {
         Long ret = eval(script,
                 Collections.singletonList(lockEntryName.getBytes()),
                 String.valueOf(durationMillis).getBytes(),
-                getLockEntry(threadId).getBytes()
+                getLockHolderEntry(threadId).getBytes()
         );
 
         return ret != null && ret == 1;
@@ -97,7 +97,7 @@ class RedisLock extends AbstractLock {
         Long ret = eval(
                 script,
                 Collections.singletonList(lockEntryName.getBytes()),
-                LockSubscription.UNLOCK_MESSAGE, getLockEntry(threadId).getBytes()
+                RedisSubscriptionListener.UNLOCK_MESSAGE, getLockHolderEntry(threadId).getBytes()
         );
 
         return ret != null && ret == 1;
