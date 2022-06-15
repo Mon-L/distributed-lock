@@ -5,7 +5,7 @@ import cn.zcn.distributed.lock.redis.RedisSubscription;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import redis.clients.jedis.Jedis;
-import redis.clients.jedis.util.Pool;
+import redis.clients.jedis.JedisPool;
 
 import java.util.Collections;
 import java.util.List;
@@ -15,12 +15,12 @@ import static org.mockito.Mockito.*;
 
 public class JedisPoolCommandFactoryTest {
 
-    private Pool<Jedis> jedisPool;
+    private JedisPool jedisPool;
     private RedisCommandFactory commandFactory;
 
     @BeforeEach
     void beforeEach() {
-        jedisPool = mock(Pool.class);
+        jedisPool = mock(JedisPool.class);
         commandFactory = spy(new JedisPoolCommandFactory(jedisPool));
     }
 

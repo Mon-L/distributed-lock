@@ -1,10 +1,8 @@
 package cn.zcn.distributed.lock.redis;
 
-import cn.zcn.distributed.lock.subscription.LockMessageListener;
-import cn.zcn.distributed.lock.test.redis.RedisCommandFactoryExtensions;
-import io.netty.util.HashedWheelTimer;
+import cn.zcn.distributed.lock.subscription.LockStatusListener;
+import cn.zcn.distributed.lock.test.redis.RedisIntegrationTestContainer;
 import io.netty.util.Timer;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -16,29 +14,23 @@ import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-public class RedisSubscriptionServiceTest {
+public class RedisSubscriptionServiceIntegrationTest {
 
     static Stream<Arguments> testParams() {
         return Stream.of(
-                Arguments.of(RedisCommandFactoryExtensions.jedisPoolCommandFactory, true),
-                Arguments.of(RedisCommandFactoryExtensions.lettuceCommandFactory, false)
+                Arguments.of(RedisIntegrationTestContainer.getJedisPoolCommandFactory(), true),
+                Arguments.of(RedisIntegrationTestContainer.getLettuceCommandFactory(), false)
         );
     }
 
     private final String lock = "lock";
-    private Timer timer;
-    private LockMessageListener listener;
+    private final Timer timer = RedisIntegrationTestContainer.getTimer();
+    private LockStatusListener listener;
 
     @BeforeEach
     void beforeEach() {
-        timer = new HashedWheelTimer();
         listener = (channel, message) -> {
         };
-    }
-
-    @AfterEach
-    void afterEach() {
-        timer.stop();
     }
 
     @ParameterizedTest

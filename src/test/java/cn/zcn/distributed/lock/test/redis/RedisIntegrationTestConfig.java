@@ -1,6 +1,6 @@
 package cn.zcn.distributed.lock.test.redis;
 
-public class RedisTestConfig {
+public class RedisIntegrationTestConfig {
     private String host;
     private int port;
     private String password;
