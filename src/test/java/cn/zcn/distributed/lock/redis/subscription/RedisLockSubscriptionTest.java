@@ -1,5 +1,8 @@
-package cn.zcn.distributed.lock.subscription;
+package cn.zcn.distributed.lock.redis.subscription;
 
+import cn.zcn.distributed.lock.redis.subscription.LockSubscription;
+import cn.zcn.distributed.lock.redis.subscription.LockSubscriptionHolder;
+import cn.zcn.distributed.lock.redis.subscription.LockSubscriptionService;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,7 +17,7 @@ import java.util.concurrent.ExecutionException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-public class LockSubscriptionTest {
+public class RedisLockSubscriptionTest {
 
     private final String lockName = "lock1";
     private LockSubscription lockSubscription;

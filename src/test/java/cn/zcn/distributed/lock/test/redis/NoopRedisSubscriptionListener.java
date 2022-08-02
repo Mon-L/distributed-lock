@@ -1,6 +1,6 @@
 package cn.zcn.distributed.lock.test.redis;
 
-import cn.zcn.distributed.lock.redis.RedisSubscriptionListener;
+import cn.zcn.distributed.lock.redis.subscription.RedisSubscriptionListener;
 
 public class NoopRedisSubscriptionListener implements RedisSubscriptionListener {
 

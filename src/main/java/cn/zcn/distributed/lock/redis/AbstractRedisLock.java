@@ -1,7 +1,8 @@
-package cn.zcn.distributed.lock;
+package cn.zcn.distributed.lock.redis;
 
-import cn.zcn.distributed.lock.subscription.LockSubscription;
-import cn.zcn.distributed.lock.subscription.LockSubscriptionHolder;
+import cn.zcn.distributed.lock.LockException;
+import cn.zcn.distributed.lock.redis.subscription.LockSubscription;
+import cn.zcn.distributed.lock.redis.subscription.LockSubscriptionHolder;
 import io.netty.util.Timeout;
 import io.netty.util.Timer;
 
@@ -12,7 +13,7 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * 分布式锁骨架
  */
-public abstract class AbstractLock implements Lock {
+public abstract class AbstractRedisLock implements RedisLock {
 
     private static class RenewLockHolder {
         private final AtomicLong count = new AtomicLong(0);
@@ -63,7 +64,7 @@ public abstract class AbstractLock implements Lock {
      * @param clientId 客户端ID
      * @param timer    定时器
      */
-    public AbstractLock(String lock, String clientId, Timer timer, LockSubscription lockSubscription) {
+    public AbstractRedisLock(String lock, String clientId, Timer timer, LockSubscription lockSubscription) {
         this.lockRawName = lock;
         this.lockEntryName = withLockPrefix(lock);
         this.clientId = clientId;

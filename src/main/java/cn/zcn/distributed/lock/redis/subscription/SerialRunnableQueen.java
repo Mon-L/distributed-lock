@@ -1,4 +1,4 @@
-package cn.zcn.distributed.lock.subscription;
+package cn.zcn.distributed.lock.redis.subscription;
 
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;

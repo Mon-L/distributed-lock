@@ -1,5 +1,7 @@
 package cn.zcn.distributed.lock.redis;
 
+import cn.zcn.distributed.lock.redis.subscription.RedisSubscription;
+
 import java.util.List;
 
 public interface RedisCommandFactory {

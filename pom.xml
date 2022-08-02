@@ -18,7 +18,7 @@
         <netty.version>4.1.77.Final</netty.version>
         <jedis.version>[4.2.2,)</jedis.version>
         <lettuce.version>[5.2.2.RELEASE,)</lettuce.version>
-        <zookeeper.version>[3.8.0,)</zookeeper.version>
+        <curator.version>[5.1.0,)</curator.version>
     </properties>
 
     <dependencyManagement>
@@ -82,12 +82,18 @@
         </dependency>
 
         <dependency>
-            <groupId>org.apache.zookeeper</groupId>
-            <artifactId>zookeeper</artifactId>
-            <version>${zookeeper.version}</version>
+            <groupId>org.apache.curator</groupId>
+            <artifactId>curator-recipes</artifactId>
+            <version>${curator.version}</version>
             <scope>provided</scope>
         </dependency>
 
+        <dependency>
+            <groupId>org.apache.curator</groupId>
+            <artifactId>curator-test</artifactId>
+            <version>${curator.version}</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>

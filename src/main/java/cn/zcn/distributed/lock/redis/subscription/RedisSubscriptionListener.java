@@ -1,4 +1,4 @@
-package cn.zcn.distributed.lock.redis;
+package cn.zcn.distributed.lock.redis.subscription;
 
 import cn.zcn.distributed.lock.LongEncoder;
 

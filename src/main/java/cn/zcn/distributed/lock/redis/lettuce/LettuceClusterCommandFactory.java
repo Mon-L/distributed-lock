@@ -1,7 +1,7 @@
 package cn.zcn.distributed.lock.redis.lettuce;
 
 import cn.zcn.distributed.lock.redis.RedisCommandFactory;
-import cn.zcn.distributed.lock.redis.RedisSubscription;
+import cn.zcn.distributed.lock.redis.subscription.RedisSubscription;
 import io.lettuce.core.ScriptOutputType;
 import io.lettuce.core.cluster.RedisClusterClient;
 import io.lettuce.core.cluster.api.StatefulRedisClusterConnection;

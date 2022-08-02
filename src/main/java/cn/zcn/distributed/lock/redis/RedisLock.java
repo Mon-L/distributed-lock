@@ -1,109 +1,46 @@
 package cn.zcn.distributed.lock.redis;
 
-import cn.zcn.distributed.lock.AbstractLock;
-import cn.zcn.distributed.lock.subscription.LockSubscription;
-import io.netty.util.Timer;
+import java.util.concurrent.TimeUnit;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
+public interface RedisLock {
 
+    /**
+     * 申请一个锁，使用默认持续时间
+     *
+     * @throws InterruptedException 中断异常
+     */
+    void lock() throws InterruptedException;
 
-/**
- * 非公平锁的 Redis 数据结构
- * <p>
- * 持有锁的对象(string):
- * <pre>
- * "distributed-lock:{lock}": {
- *     "{client-id}:{thread-id}" : {count}
- * }
- * </pre>
- */
-class RedisLock extends AbstractLock {
+    /**
+     * 申请一个锁，锁的持续时间为 {@code duration}。阻塞当前线程，直到锁申请成功，可被中断
+     *
+     * @param duration         期望申请的锁的持续时间
+     * @param durationTimeUnit 时间单位
+     * @throws InterruptedException 中断异常
+     */
+    void lock(long duration, TimeUnit durationTimeUnit) throws InterruptedException;
 
-    private final RedisCommandFactory commandFactory;
+    /**
+     * 申请一个锁，锁的持续时间为 {@code duration}。会阻塞当前线程，直到锁申请成功，最长阻塞等待时间为 {@code waitTime}，可被中断
+     *
+     * @param waitTime         申请锁的最长等待时间
+     * @param waitTimeUnit     申请锁的最长等待时间的单位
+     * @param duration         期望申请的锁的持续时间
+     * @param durationTimeUnit 锁的持续时间的单位
+     * @return true, 在指定时间内申请锁成功；false, 申请锁失败
+     * @throws InterruptedException 中断异常
+     */
+    boolean tryLock(long waitTime, TimeUnit waitTimeUnit, long duration, TimeUnit durationTimeUnit) throws InterruptedException;
 
-    public RedisLock(String lock, String clientId, Timer timer, LockSubscription lockSubscription, RedisCommandFactory commandFactory) {
-        super(lock, clientId, timer, lockSubscription);
-        this.commandFactory = commandFactory;
-    }
+    /**
+     * 释放锁。如果该线程没有获得分布式锁，则无法释放
+     */
+    void unlock();
 
-    @Override
-    public boolean isHeldByCurrentThread() {
-        long threadId = Thread.currentThread().getId();
-        String script = "return redis.call('hexists', KEYS[1], ARGV[1])";
-
-        Long ret = eval(script,
-                Collections.singletonList(lockEntryName.getBytes()),
-                getLockHolderEntry(threadId).getBytes()
-        );
-
-        return ret != null && ret == 1;
-    }
-
-    @Override
-    protected Long doLock(long durationMillis, long threadId) {
-        String script = "if(redis.call('exists', KEYS[1]) == 0) then " +
-                "redis.call('hincrby', KEYS[1], ARGV[2], 1);" +
-                "redis.call('pexpire', KEYS[1], ARGV[1]);" +
-                "return nil;" +
-                "end;" +
-                "if(redis.call('hexists', KEYS[1], ARGV[2]) == 1) then " +
-                "redis.call('hincrby', KEYS[1], ARGV[2], 1);" +
-                "redis.call('pexpire', KEYS[1], ARGV[1]);" +
-                "return nil;" +
-                "end;" +
-                "return redis.call('pttl', KEYS[1]);";
-
-        return eval(script,
-                Collections.singletonList(lockEntryName.getBytes()),
-                String.valueOf(durationMillis).getBytes(),
-                getLockHolderEntry(threadId).getBytes()
-        );
-    }
-
-    @Override
-    protected boolean doRenew(long durationMillis, long threadId) {
-        String script = "if(redis.call('hexists', KEYS[1], ARGV[2]) == 1) then " +
-                "redis.call('pexpire', KEYS[1], ARGV[1]);" +
-                "return 1;" +
-                "end;" +
-                "return 0;";
-
-        Long ret = eval(script,
-                Collections.singletonList(lockEntryName.getBytes()),
-                String.valueOf(durationMillis).getBytes(),
-                getLockHolderEntry(threadId).getBytes()
-        );
-
-        return ret != null && ret == 1;
-    }
-
-    @Override
-    protected boolean doUnLock(long threadId) {
-        String script = "if(redis.call('hexists', KEYS[1], ARGV[2]) == 0) then " +
-                "return nil;" +
-                "end;" +
-                "local counter = redis.call('hincrby', KEYS[1], ARGV[2], -1);" +
-                "if(counter <= 0) then " +
-                "redis.call('del', KEYS[1]);" +
-                "redis.call('publish', KEYS[1], ARGV[1]);" +
-                "return 1;" +
-                "else " +
-                "return 0;" +
-                "end;" +
-                "return nil;";
-
-        Long ret = eval(
-                script,
-                Collections.singletonList(lockEntryName.getBytes()),
-                RedisSubscriptionListener.UNLOCK_MESSAGE, getLockHolderEntry(threadId).getBytes()
-        );
-
-        return ret != null && ret == 1;
-    }
-
-    protected Long eval(String script, List<byte[]> keys, byte[]... args) {
-        return (Long) commandFactory.eval(script.getBytes(), keys, Arrays.asList(args));
-    }
+    /**
+     * 判断锁是否被当前线程持有
+     *
+     * @return true, 当前线程持有该锁；false，当前线程不持有该锁
+     */
+    boolean isHeldByCurrentThread();
 }

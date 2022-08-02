@@ -1,7 +1,7 @@
 package cn.zcn.distributed.lock.test.redis;
 
 import cn.zcn.distributed.lock.redis.RedisCommandFactory;
-import cn.zcn.distributed.lock.redis.RedisSubscriptionService;
+import cn.zcn.distributed.lock.redis.subscription.RedisSubscriptionService;
 import cn.zcn.distributed.lock.redis.jedis.JedisPoolCommandFactory;
 import cn.zcn.distributed.lock.redis.lettuce.LettuceCommandFactory;
 import io.lettuce.core.RedisClient;

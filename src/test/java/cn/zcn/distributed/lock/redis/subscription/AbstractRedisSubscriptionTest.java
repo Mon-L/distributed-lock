@@ -1,4 +1,4 @@
-package cn.zcn.distributed.lock.redis;
+package cn.zcn.distributed.lock.redis.subscription;
 
 import cn.zcn.distributed.lock.test.redis.NoopRedisSubscriptionListener;
 import org.junit.jupiter.api.BeforeEach;

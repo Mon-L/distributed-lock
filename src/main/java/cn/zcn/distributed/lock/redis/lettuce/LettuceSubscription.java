@@ -1,7 +1,7 @@
 package cn.zcn.distributed.lock.redis.lettuce;
 
-import cn.zcn.distributed.lock.redis.AbstractRedisSubscription;
-import cn.zcn.distributed.lock.redis.RedisSubscriptionListener;
+import cn.zcn.distributed.lock.redis.subscription.AbstractRedisSubscription;
+import cn.zcn.distributed.lock.redis.subscription.RedisSubscriptionListener;
 import io.lettuce.core.pubsub.RedisPubSubAdapter;
 import io.lettuce.core.pubsub.StatefulRedisPubSubConnection;
 import io.lettuce.core.pubsub.api.async.RedisPubSubAsyncCommands;

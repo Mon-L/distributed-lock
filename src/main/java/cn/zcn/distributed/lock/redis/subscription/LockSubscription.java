@@ -1,4 +1,4 @@
-package cn.zcn.distributed.lock.subscription;
+package cn.zcn.distributed.lock.redis.subscription;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;

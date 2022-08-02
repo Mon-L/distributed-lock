@@ -1,6 +1,6 @@
 package cn.zcn.distributed.lock.redis.jedis;
 
-import cn.zcn.distributed.lock.redis.RedisSubscriptionListener;
+import cn.zcn.distributed.lock.redis.subscription.RedisSubscriptionListener;
 import redis.clients.jedis.BinaryJedisPubSub;
 
 class JedisPubSubAdapter extends BinaryJedisPubSub {

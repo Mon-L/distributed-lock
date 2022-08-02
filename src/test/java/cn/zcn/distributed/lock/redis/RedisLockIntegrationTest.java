@@ -1,7 +1,8 @@
 package cn.zcn.distributed.lock.redis;
 
 import cn.zcn.distributed.lock.ClientId;
-import cn.zcn.distributed.lock.subscription.LockSubscription;
+import cn.zcn.distributed.lock.redis.subscription.LockSubscription;
+import cn.zcn.distributed.lock.redis.subscription.RedisSubscriptionService;
 import cn.zcn.distributed.lock.test.redis.RedisIntegrationTestContainer;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -17,7 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 public class RedisLockIntegrationTest {
 
-    private RedisLock redisLock;
+    private RedisLockImpl redisLock;
 
     static Stream<Arguments> testParams() {
         return Stream.of(
@@ -27,7 +28,7 @@ public class RedisLockIntegrationTest {
     }
 
     private void initLock(RedisCommandFactory commandFactory, RedisSubscriptionService subscriptionService) {
-        redisLock = new RedisLock(UUID.randomUUID().toString(), ClientId.VALUE, RedisIntegrationTestContainer.getTimer(), new LockSubscription(subscriptionService), commandFactory);
+        redisLock = new RedisLockImpl(UUID.randomUUID().toString(), ClientId.VALUE, RedisIntegrationTestContainer.getTimer(), new LockSubscription(subscriptionService), commandFactory);
     }
 
     @ParameterizedTest

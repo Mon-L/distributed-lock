@@ -1,7 +1,8 @@
 package cn.zcn.distributed.lock.redis;
 
-import cn.zcn.distributed.lock.subscription.LockSubscription;
-import cn.zcn.distributed.lock.subscription.LockSubscriptionHolder;
+import cn.zcn.distributed.lock.redis.subscription.LockSubscription;
+import cn.zcn.distributed.lock.redis.subscription.LockSubscriptionHolder;
+import cn.zcn.distributed.lock.redis.subscription.RedisSubscriptionListener;
 import io.netty.util.Timer;
 
 import java.util.ArrayList;
@@ -35,12 +36,12 @@ import java.util.concurrent.CompletableFuture;
  * ]
  * </pre>
  */
-public class RedisFairLock extends RedisLock {
+public class RedisFairLockImpl extends RedisLockImpl {
 
     private final String queenName;
     private final String timeoutSetName;
 
-    public RedisFairLock(String lock, String clientId, Timer timer, LockSubscription lockSubscription, RedisCommandFactory commandFactory) {
+    public RedisFairLockImpl(String lock, String clientId, Timer timer, LockSubscription lockSubscription, RedisCommandFactory commandFactory) {
         super(lock, clientId, timer, lockSubscription, commandFactory);
         queenName = withLockPrefix(lock + ":queen");
         timeoutSetName = withLockPrefix(lock + ":timeout");

@@ -1,7 +1,7 @@
 package cn.zcn.distributed.lock.redis.jedis;
 
-import cn.zcn.distributed.lock.redis.AbstractRedisSubscription;
-import cn.zcn.distributed.lock.redis.RedisSubscriptionListener;
+import cn.zcn.distributed.lock.redis.subscription.AbstractRedisSubscription;
+import cn.zcn.distributed.lock.redis.subscription.RedisSubscriptionListener;
 import redis.clients.jedis.BinaryJedisPubSub;
 import redis.clients.jedis.UnifiedJedis;
 

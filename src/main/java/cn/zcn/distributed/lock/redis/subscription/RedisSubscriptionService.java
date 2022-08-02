@@ -1,7 +1,6 @@
-package cn.zcn.distributed.lock.redis;
+package cn.zcn.distributed.lock.redis.subscription;
 
-import cn.zcn.distributed.lock.subscription.LockStatusListener;
-import cn.zcn.distributed.lock.subscription.LockSubscriptionService;
+import cn.zcn.distributed.lock.redis.RedisCommandFactory;
 import io.netty.util.Timeout;
 import io.netty.util.Timer;
 

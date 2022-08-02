@@ -1,7 +1,7 @@
 package cn.zcn.distributed.lock.redis.jedis;
 
 import cn.zcn.distributed.lock.redis.RedisCommandFactory;
-import cn.zcn.distributed.lock.redis.RedisSubscription;
+import cn.zcn.distributed.lock.redis.subscription.RedisSubscription;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import redis.clients.jedis.Jedis;

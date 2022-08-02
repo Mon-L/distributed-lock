@@ -1,7 +1,7 @@
 package cn.zcn.distributed.lock.redis.jedis;
 
 import cn.zcn.distributed.lock.redis.RedisCommandFactory;
-import cn.zcn.distributed.lock.redis.RedisSubscription;
+import cn.zcn.distributed.lock.redis.subscription.RedisSubscription;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.util.Pool;
 

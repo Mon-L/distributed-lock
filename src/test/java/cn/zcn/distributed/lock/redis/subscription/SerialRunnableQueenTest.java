@@ -1,5 +1,6 @@
-package cn.zcn.distributed.lock.subscription;
+package cn.zcn.distributed.lock.redis.subscription;
 
+import cn.zcn.distributed.lock.redis.subscription.SerialRunnableQueen;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
