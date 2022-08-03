@@ -57,14 +57,14 @@ public abstract class AbstractRedisLock implements RedisLock {
     /**
      * 客户端 ID
      */
-    protected final String clientId;
+    protected final ClientId clientId;
 
     /**
      * @param lock     分布式锁的名称
      * @param clientId 客户端ID
      * @param timer    定时器
      */
-    public AbstractRedisLock(String lock, String clientId, Timer timer, LockSubscription lockSubscription) {
+    public AbstractRedisLock(String lock, ClientId clientId, Timer timer, LockSubscription lockSubscription) {
         this.lockRawName = lock;
         this.lockEntryName = withLockPrefix(lock);
         this.clientId = clientId;
@@ -263,7 +263,7 @@ public abstract class AbstractRedisLock implements RedisLock {
     }
 
     protected String getLockHolderEntry(long threadId) {
-        return clientId + ":" + threadId;
+        return clientId.getValue() + ":" + threadId;
     }
 
     @Override

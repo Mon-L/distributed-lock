@@ -1,6 +1,5 @@
 package cn.zcn.distributed.lock.redis;
 
-import cn.zcn.distributed.lock.ClientId;
 import cn.zcn.distributed.lock.redis.subscription.LockSubscription;
 import cn.zcn.distributed.lock.redis.subscription.RedisSubscriptionService;
 import cn.zcn.distributed.lock.test.redis.RedisIntegrationTestContainer;
@@ -36,7 +35,7 @@ public class RedisFairLockIntegrationTest {
     }
 
     private void initLock(RedisCommandFactory commandFactory, RedisSubscriptionService subscriptionService) {
-        redisLock = new RedisFairLockImpl(UUID.randomUUID().toString(), ClientId.VALUE, RedisIntegrationTestContainer.getTimer(), new LockSubscription(subscriptionService), commandFactory);
+        redisLock = new RedisFairLockImpl(UUID.randomUUID().toString(), ClientId.create(), RedisIntegrationTestContainer.getTimer(), new LockSubscription(subscriptionService), commandFactory);
     }
 
     @ParameterizedTest

@@ -23,7 +23,7 @@ class RedisLockImpl extends AbstractRedisLock {
 
     private final RedisCommandFactory commandFactory;
 
-    public RedisLockImpl(String lock, String clientId, Timer timer, LockSubscription lockSubscription, RedisCommandFactory commandFactory) {
+    public RedisLockImpl(String lock, ClientId clientId, Timer timer, LockSubscription lockSubscription, RedisCommandFactory commandFactory) {
         super(lock, clientId, timer, lockSubscription);
         this.commandFactory = commandFactory;
     }

@@ -41,7 +41,7 @@ public class RedisFairLockImpl extends RedisLockImpl {
     private final String queenName;
     private final String timeoutSetName;
 
-    public RedisFairLockImpl(String lock, String clientId, Timer timer, LockSubscription lockSubscription, RedisCommandFactory commandFactory) {
+    public RedisFairLockImpl(String lock, ClientId clientId, Timer timer, LockSubscription lockSubscription, RedisCommandFactory commandFactory) {
         super(lock, clientId, timer, lockSubscription, commandFactory);
         queenName = withLockPrefix(lock + ":queen");
         timeoutSetName = withLockPrefix(lock + ":timeout");
@@ -170,11 +170,11 @@ public class RedisFairLockImpl extends RedisLockImpl {
 
     @Override
     protected CompletableFuture<LockSubscriptionHolder> subscribe(long threadId) {
-        return lockSubscription.subscribe(lockRawName + ":" + clientId + ":" + threadId);
+        return lockSubscription.subscribe(lockRawName + ":" + clientId.getValue() + ":" + threadId);
     }
 
     @Override
     protected void unsubscribe(LockSubscriptionHolder lockSubscriptionHolder, long threadId) {
-        lockSubscription.unsubscribe(lockSubscriptionHolder, lockRawName + ":" + clientId + ":" + threadId);
+        lockSubscription.unsubscribe(lockSubscriptionHolder, lockRawName + ":" + clientId.getValue() + ":" + threadId);
     }
 }
