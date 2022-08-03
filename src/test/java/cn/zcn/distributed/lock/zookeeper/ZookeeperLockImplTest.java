@@ -4,7 +4,6 @@ import org.apache.curator.RetryPolicy;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.retry.ExponentialBackoffRetry;
-import org.apache.curator.test.TestingServer;
 import org.apache.curator.test.Timing;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -19,18 +18,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatException;
 
-public class ZookeeperLockImplTest {
+public class ZookeeperLockImplTest extends BaseLockTest {
 
-    private TestingServer server;
     private ZookeeperLock lock;
     private CuratorFramework client;
 
     @BeforeEach
-    void before() throws Exception {
-        server = new TestingServer();
-        server.start();
-
-        final Timing timing = new Timing();
+    void before() {
+        Timing timing = new Timing();
 
         RetryPolicy retryPolicy = new ExponentialBackoffRetry(200, 3);
         client = CuratorFrameworkFactory.newClient(server.getConnectString(), timing.session(), timing.connection(), retryPolicy);
@@ -225,6 +220,5 @@ public class ZookeeperLockImplTest {
     @AfterEach
     void after() throws IOException {
         client.close();
-        server.stop();
     }
 }

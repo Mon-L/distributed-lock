@@ -17,6 +17,16 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 class ZookeeperLockImpl implements ZookeeperLock {
 
+    protected static class AcquireLockResult {
+        private final boolean isLock;
+        private final String watchedNodeName;
+
+        protected AcquireLockResult(boolean isLock, String watchedNodeName) {
+            this.isLock = isLock;
+            this.watchedNodeName = watchedNodeName;
+        }
+    }
+
     private static class LockHolder {
         private final String lockPath;
         private final AtomicInteger count = new AtomicInteger(1);
@@ -28,7 +38,7 @@ class ZookeeperLockImpl implements ZookeeperLock {
 
     private static final String LOCK_NAME = "lock-";
 
-    private final String containerPath;
+    protected final String containerPath;
     private final String lockPath;
     protected final CuratorFramework client;
     private final Map<Thread, LockHolder> locks = new ConcurrentHashMap<>();
@@ -40,12 +50,16 @@ class ZookeeperLockImpl implements ZookeeperLock {
         }
     };
 
-    ZookeeperLockImpl(String path, CuratorFramework client) {
+    protected ZookeeperLockImpl(String path, CuratorFramework client) {
+        this(path, LOCK_NAME, client);
+    }
+
+    protected ZookeeperLockImpl(String path, String lockName, CuratorFramework client) {
         PathUtils.validatePath(path);
 
         this.client = client;
         this.containerPath = path;
-        this.lockPath = containerPath + "/" + LOCK_NAME;
+        this.lockPath = containerPath + "/" + lockName;
     }
 
     @Override
@@ -68,7 +82,7 @@ class ZookeeperLockImpl implements ZookeeperLock {
             return true;
         }
 
-        String lockPath = attemptLock(waitTime, waitTimeUnit);
+        String lockPath = acquireLock(waitTime, waitTimeUnit);
         if (lockPath != null) {
             lockHolder = new LockHolder(lockPath);
             locks.put(thread, lockHolder);
@@ -78,7 +92,7 @@ class ZookeeperLockImpl implements ZookeeperLock {
         return false;
     }
 
-    private String attemptLock(long waitTime, TimeUnit waitTimeUnit) throws Exception {
+    private String acquireLock(long waitTime, TimeUnit waitTimeUnit) throws Exception {
         long startTime = System.currentTimeMillis();
         Long timeToWait = (waitTimeUnit == null) ? null : waitTimeUnit.toMillis(waitTime);
 
@@ -89,19 +103,12 @@ class ZookeeperLockImpl implements ZookeeperLock {
 
         while (client.getState() == CuratorFrameworkState.STARTED && !locked) {
             try {
-                List<String> nodes = getSortedNodes();
-                String nodeName = nodePath.substring(containerPath.length() + 1);
+                AcquireLockResult ret = isAcquired(nodePath);
 
-                int index = nodes.indexOf(nodeName);
-
-                if (index < 0) {
-                    throw new KeeperException.NoNodeException("Node not found: " + nodePath);
-                }
-
-                if (index == 0) {
+                if (ret.isLock) {
                     locked = true;
                 } else {
-                    String prevNodePath = ZKPaths.makePath(containerPath, nodes.get(index - 1));
+                    String prevNodePath = ZKPaths.makePath(containerPath, ret.watchedNodeName);
 
                     synchronized (this) {
                         try {
@@ -169,10 +176,25 @@ class ZookeeperLockImpl implements ZookeeperLock {
         }
     }
 
-    private List<String> getSortedNodes() throws Exception {
+    protected List<String> getSortedNodes() throws Exception {
         List<String> children = client.getChildren().forPath(containerPath);
         children.sort((o1, o2) -> getLockSequence(o1).compareTo(getLockSequence(o2)));
         return children;
+    }
+
+    protected AcquireLockResult isAcquired(String nodePath) throws Exception {
+        List<String> nodes = getSortedNodes();
+        String nodeName = nodePath.substring(containerPath.length() + 1);
+
+        int index = nodes.indexOf(nodeName);
+
+        if (index < 0) {
+            throw new KeeperException.NoNodeException("Node not found: " + nodePath);
+        } else if (index == 0) {
+            return new AcquireLockResult(true, null);
+        } else {
+            return new AcquireLockResult(false, nodes.get(index - 1));
+        }
     }
 
     private String getLockSequence(String name) {
