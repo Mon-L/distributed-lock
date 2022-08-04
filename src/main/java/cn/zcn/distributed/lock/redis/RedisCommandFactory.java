@@ -23,5 +23,7 @@ public interface RedisCommandFactory {
      */
     RedisSubscription getSubscription();
 
+    boolean isBlocked();
+
     void stop();
 }

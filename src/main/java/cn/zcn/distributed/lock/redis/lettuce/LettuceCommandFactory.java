@@ -33,6 +33,11 @@ public class LettuceCommandFactory implements RedisCommandFactory {
     }
 
     @Override
+    public boolean isBlocked() {
+        return false;
+    }
+
+    @Override
     public void stop() {
         if (conn.isOpen()) {
             conn.close();

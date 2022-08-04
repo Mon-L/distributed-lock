@@ -1,9 +1,9 @@
 package cn.zcn.distributed.lock.test.redis;
 
 import cn.zcn.distributed.lock.redis.RedisCommandFactory;
-import cn.zcn.distributed.lock.redis.subscription.RedisSubscriptionService;
 import cn.zcn.distributed.lock.redis.jedis.JedisPoolCommandFactory;
 import cn.zcn.distributed.lock.redis.lettuce.LettuceCommandFactory;
+import cn.zcn.distributed.lock.redis.subscription.RedisSubscriptionService;
 import io.lettuce.core.RedisClient;
 import io.lettuce.core.RedisURI;
 import io.netty.util.HashedWheelTimer;
@@ -40,7 +40,7 @@ public class RedisIntegrationTestContainer {
             return commandFactory;
         }
     });
-    
+
     private static final NewableLazy<RedisCommandFactory> lettuceCommandFactory = NewableLazy.of(new Supplier<RedisCommandFactory>() {
         @Override
         public RedisCommandFactory get() {
@@ -62,14 +62,14 @@ public class RedisIntegrationTestContainer {
     });
 
     private static final NewableLazy<RedisSubscriptionService> jedisPoolSubscriptionService = NewableLazy.of(() -> {
-        RedisSubscriptionService subscriptionService = new RedisSubscriptionService(timer.get(), jedisPoolCommandFactory.get(), true);
+        RedisSubscriptionService subscriptionService = new RedisSubscriptionService(timer.get(), jedisPoolCommandFactory.get());
         subscriptionService.start();
         ShutdownQueue.register(subscriptionService::stop);
         return subscriptionService;
     });
 
     private static final NewableLazy<RedisSubscriptionService> lettuceSubscriptionService = NewableLazy.of(() -> {
-        RedisSubscriptionService subscriptionService = new RedisSubscriptionService(timer.get(), lettuceCommandFactory.get(), false);
+        RedisSubscriptionService subscriptionService = new RedisSubscriptionService(timer.get(), lettuceCommandFactory.get());
         subscriptionService.start();
         ShutdownQueue.register(subscriptionService::stop);
         return subscriptionService;

@@ -1,8 +1,6 @@
 package cn.zcn.distributed.lock.redis.subscription;
 
 import cn.zcn.distributed.lock.redis.RedisCommandFactory;
-import cn.zcn.distributed.lock.redis.subscription.LockStatusListener;
-import cn.zcn.distributed.lock.redis.subscription.RedisSubscriptionService;
 import cn.zcn.distributed.lock.test.redis.RedisIntegrationTestContainer;
 import io.netty.util.Timer;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,8 +18,8 @@ public class RedisSubscriptionServiceIntegrationTest {
 
     static Stream<Arguments> testParams() {
         return Stream.of(
-                Arguments.of(RedisIntegrationTestContainer.getJedisPoolCommandFactory(), true),
-                Arguments.of(RedisIntegrationTestContainer.getLettuceCommandFactory(), false)
+                Arguments.of(RedisIntegrationTestContainer.getJedisPoolCommandFactory()),
+                Arguments.of(RedisIntegrationTestContainer.getLettuceCommandFactory())
         );
     }
 
@@ -37,8 +35,8 @@ public class RedisSubscriptionServiceIntegrationTest {
 
     @ParameterizedTest
     @MethodSource("testParams")
-    void testSubscribe(RedisCommandFactory commandFactory, boolean isBlocking) {
-        RedisSubscriptionService subscriptionService = new RedisSubscriptionService(timer, commandFactory, isBlocking);
+    void testSubscribe(RedisCommandFactory commandFactory) {
+        RedisSubscriptionService subscriptionService = new RedisSubscriptionService(timer, commandFactory);
         subscriptionService.start();
 
         CompletableFuture<Void> promise = subscriptionService.subscribe(lock, listener);
@@ -55,8 +53,8 @@ public class RedisSubscriptionServiceIntegrationTest {
 
     @ParameterizedTest
     @MethodSource("testParams")
-    void testUnsubscribe(RedisCommandFactory commandFactory, boolean isBlocking) {
-        RedisSubscriptionService subscriptionService = new RedisSubscriptionService(timer, commandFactory, isBlocking);
+    void testUnsubscribe(RedisCommandFactory commandFactory) {
+        RedisSubscriptionService subscriptionService = new RedisSubscriptionService(timer, commandFactory);
         subscriptionService.start();
 
         CompletableFuture<Void> promise;
@@ -74,8 +72,8 @@ public class RedisSubscriptionServiceIntegrationTest {
 
     @ParameterizedTest
     @MethodSource("testParams")
-    void testStop(RedisCommandFactory commandFactory, boolean isBlocking) throws InterruptedException {
-        RedisSubscriptionService subscriptionService = new RedisSubscriptionService(timer, commandFactory, isBlocking);
+    void testStop(RedisCommandFactory commandFactory) throws InterruptedException {
+        RedisSubscriptionService subscriptionService = new RedisSubscriptionService(timer, commandFactory);
         subscriptionService.start();
 
         CompletableFuture<Void> subscribePromise = subscriptionService.subscribe(lock, listener);

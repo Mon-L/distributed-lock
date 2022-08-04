@@ -16,11 +16,11 @@ public class RedisLockFactory {
     private final RedisCommandFactory redisCommandFactory;
     private final RedisSubscriptionService redisSubscriptionService;
 
-    public RedisLockFactory(RedisCommandFactory redisCommandFactory, boolean isBlocking) {
+    public RedisLockFactory(RedisCommandFactory redisCommandFactory) {
         this.clientId = ClientId.create();
         this.timer = new HashedWheelTimer(10, TimeUnit.MILLISECONDS);
         this.redisCommandFactory = redisCommandFactory;
-        this.redisSubscriptionService = new RedisSubscriptionService(timer, redisCommandFactory, isBlocking);
+        this.redisSubscriptionService = new RedisSubscriptionService(timer, redisCommandFactory);
         this.lockSubscription = new LockSubscription(redisSubscriptionService);
     }
 

@@ -39,13 +39,11 @@ public class RedisSubscriptionService implements LockSubscriptionService {
     private final Timer timer;
     private final RedisCommandFactory commandFactory;
     private final Map<ByteArrayHolder, LockStatusListener> channelListeners = new ConcurrentHashMap<>();
-    private final boolean isBlocking;
 
     private BlockingSubscriber subscriber;
 
-    public RedisSubscriptionService(Timer timer, RedisCommandFactory commandFactory, boolean isBlocking) {
+    public RedisSubscriptionService(Timer timer, RedisCommandFactory commandFactory) {
         this.timer = timer;
-        this.isBlocking = isBlocking;
         this.commandFactory = commandFactory;
     }
 
@@ -54,7 +52,7 @@ public class RedisSubscriptionService implements LockSubscriptionService {
         if (running.compareAndSet(false, true)) {
             DispatchLockStatusListener lockMessageListener = new DispatchLockStatusListener(channelListeners);
 
-            if (isBlocking) {
+            if (commandFactory.isBlocked()) {
                 subscriber = new BlockingSubscriber(commandFactory, lockMessageListener);
             } else {
                 subscriber = new Subscriber(commandFactory, lockMessageListener);

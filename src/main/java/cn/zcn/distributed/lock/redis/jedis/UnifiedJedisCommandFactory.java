@@ -25,6 +25,11 @@ public class UnifiedJedisCommandFactory implements RedisCommandFactory {
     }
 
     @Override
+    public boolean isBlocked() {
+        return true;
+    }
+
+    @Override
     public void stop() {
         unifiedJedis.close();
     }

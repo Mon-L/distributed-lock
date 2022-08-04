@@ -29,6 +29,11 @@ public class JedisPoolCommandFactory implements RedisCommandFactory {
     }
 
     @Override
+    public boolean isBlocked() {
+        return true;
+    }
+
+    @Override
     public void stop() {
         if (!jedisPool.isClosed()) {
             jedisPool.close();
