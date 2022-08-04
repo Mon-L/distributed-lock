@@ -5,6 +5,7 @@ import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.retry.ExponentialBackoffRetry;
 import org.apache.curator.test.Timing;
+import org.apache.curator.utils.CloseableUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -16,10 +17,10 @@ import java.util.concurrent.*;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-public class ZookeeperReadWriteLockImplTest extends BaseLockTest {
+public class ZkReadWriteLockImplTest extends BaseLockTest {
 
-    private ZookeeperLock readLock;
-    private ZookeeperLock writeLock;
+    private ZkLock readLock;
+    private ZkLock writeLock;
     private CuratorFramework client;
 
     @BeforeEach
@@ -30,7 +31,7 @@ public class ZookeeperReadWriteLockImplTest extends BaseLockTest {
         client = CuratorFrameworkFactory.newClient(server.getConnectString(), timing.session(), timing.connection(), retryPolicy);
         client.start();
 
-        ZookeeperReadWriteLock lock = new ZookeeperReadWriteLockImpl("/test-lock", client);
+        ZkReadWriteLock lock = new ZkReadWriteLockImpl("/test-lock", client);
         readLock = lock.readLock();
         writeLock = lock.writeLock();
     }
@@ -127,8 +128,46 @@ public class ZookeeperReadWriteLockImplTest extends BaseLockTest {
         assertThat(hasWriteLock.get(3, TimeUnit.SECONDS)).isTrue();
     }
 
+    @Test
+    void testReadIfHeldWriteLock() {
+        ExecutorService service = Executors.newSingleThreadExecutor();
+        Future<?> f = service.submit(() -> {
+            checkInitialState();
+
+            try {
+                //acquire write lock
+                writeLock.lock();
+
+                //acquire read lock
+                readLock.lock();
+                assertThat(writeLock.heldByCurrentThread()).isTrue();
+                assertThat(readLock.heldByCurrentThread()).isTrue();
+
+                //release write lock
+                writeLock.unlock();
+                assertThat(writeLock.heldByCurrentThread()).isFalse();
+                assertThat(readLock.heldByCurrentThread()).isTrue();
+
+                //release read lock
+                readLock.unlock();
+                assertThat(writeLock.heldByCurrentThread()).isFalse();
+                assertThat(readLock.heldByCurrentThread()).isFalse();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        });
+
+        try {
+            f.get(2, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            service.shutdownNow();
+        }
+    }
+
     @AfterEach
     void after() {
-        client.close();
+        CloseableUtils.closeQuietly(client);
     }
 }

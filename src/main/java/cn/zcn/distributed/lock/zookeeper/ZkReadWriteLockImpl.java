@@ -5,39 +5,46 @@ import org.apache.curator.utils.PathUtils;
 
 import java.util.List;
 
-class ZookeeperReadWriteLockImpl implements ZookeeperReadWriteLock {
+class ZkReadWriteLockImpl implements ZkReadWriteLock {
 
     private static final String READ_LOCK_NAME = "r-lock-";
     private static final String WRITE_LOCK_NAME = "w-lock-";
 
-    private final ZookeeperLock readLock;
-    private final ZookeeperLock writeLock;
+    private final ZkLock readLock;
+    private final ZkLock writeLock;
 
-    protected ZookeeperReadWriteLockImpl(String path, CuratorFramework client) {
+    protected ZkReadWriteLockImpl(String path, CuratorFramework client) {
         PathUtils.validatePath(path);
 
-        this.readLock = new ReadLock(path, READ_LOCK_NAME, client);
         this.writeLock = new WriteLock(path, WRITE_LOCK_NAME, client);
+        this.readLock = new ReadLock(this.writeLock, path, READ_LOCK_NAME, client);
     }
 
     @Override
-    public ZookeeperLock readLock() {
+    public ZkLock readLock() {
         return readLock;
     }
 
     @Override
-    public ZookeeperLock writeLock() {
+    public ZkLock writeLock() {
         return writeLock;
     }
 
-    private static class ReadLock extends ZookeeperLockImpl {
+    private static class ReadLock extends ZkLockImpl {
 
-        ReadLock(String path, String lockName, CuratorFramework client) {
+        private final ZkLock writeLock;
+
+        ReadLock(ZkLock writeLock, String path, String lockName, CuratorFramework client) {
             super(path, lockName, client);
+            this.writeLock = writeLock;
         }
 
         @Override
-        protected ZookeeperLockImpl.AcquireLockResult isAcquired(String nodePath) throws Exception {
+        protected ZkLockImpl.AcquireLockResult isAcquired(String nodePath) throws Exception {
+            if (writeLock.heldByCurrentThread()) {
+                return new AcquireLockResult(true, null);
+            }
+
             List<String> nodes = getSortedNodes();
             String nodeName = nodePath.substring(containerPath.length() + 1);
 
@@ -49,13 +56,12 @@ class ZookeeperReadWriteLockImpl implements ZookeeperReadWriteLock {
                 }
             }
 
-            System.out.printf("index=%d, name=%s\r\n", index, nodeName);
             return new AcquireLockResult(true, null);
         }
     }
 
 
-    private static class WriteLock extends ZookeeperLockImpl {
+    private static class WriteLock extends ZkLockImpl {
 
         WriteLock(String path, String lockName, CuratorFramework client) {
             super(path, lockName, client);

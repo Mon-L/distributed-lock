@@ -2,7 +2,7 @@ package cn.zcn.distributed.lock.zookeeper;
 
 import java.util.concurrent.TimeUnit;
 
-public interface ZookeeperLock {
+public interface ZkLock {
 
     void lock() throws Exception;
 

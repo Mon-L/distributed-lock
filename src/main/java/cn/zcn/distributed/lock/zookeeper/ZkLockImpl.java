@@ -15,7 +15,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-class ZookeeperLockImpl implements ZookeeperLock {
+class ZkLockImpl implements ZkLock {
 
     protected static class AcquireLockResult {
         private final boolean isLock;
@@ -46,20 +46,20 @@ class ZookeeperLockImpl implements ZookeeperLock {
     private final Watcher watcher = new Watcher() {
         @Override
         public void process(WatchedEvent event) {
-            client.postSafeNotify(ZookeeperLockImpl.this);
+            client.postSafeNotify(ZkLockImpl.this);
         }
     };
 
-    protected ZookeeperLockImpl(String path, CuratorFramework client) {
+    protected ZkLockImpl(String path, CuratorFramework client) {
         this(path, LOCK_NAME, client);
     }
 
-    protected ZookeeperLockImpl(String path, String lockName, CuratorFramework client) {
+    protected ZkLockImpl(String path, String lockName, CuratorFramework client) {
         PathUtils.validatePath(path);
 
         this.client = client;
         this.containerPath = path;
-        this.lockPath = containerPath + "/" + lockName;
+        this.lockPath = ZKPaths.makePath(containerPath, lockName);
     }
 
     @Override
@@ -162,9 +162,8 @@ class ZookeeperLockImpl implements ZookeeperLock {
 
         int count = lockHolder.count.decrementAndGet();
 
-
         if (count < 0) {
-            throw new IllegalMonitorStateException("Lock count has gone negative for lock: " + lockPath);
+            throw new IllegalMonitorStateException("Unexpected negative count for lock: " + lockPath);
         } else if (count == 0) {
             try {
                 client.delete().guaranteed().forPath(lockHolder.lockPath);

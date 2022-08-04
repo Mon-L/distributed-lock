@@ -1,6 +1,7 @@
 package cn.zcn.distributed.lock.zookeeper;
 
 import org.apache.curator.test.TestingServer;
+import org.apache.curator.utils.CloseableUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
@@ -19,6 +20,6 @@ public class BaseLockTest {
 
     @AfterEach
     void baseLockTest_after() throws IOException {
-        server.stop();
+        CloseableUtils.closeQuietly(server);
     }
 }

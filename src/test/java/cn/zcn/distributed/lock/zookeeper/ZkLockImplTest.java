@@ -5,6 +5,7 @@ import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.retry.ExponentialBackoffRetry;
 import org.apache.curator.test.Timing;
+import org.apache.curator.utils.CloseableUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -18,9 +19,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatException;
 
-public class ZookeeperLockImplTest extends BaseLockTest {
+public class ZkLockImplTest extends BaseLockTest {
 
-    private ZookeeperLock lock;
+    private ZkLock lock;
     private CuratorFramework client;
 
     @BeforeEach
@@ -31,7 +32,7 @@ public class ZookeeperLockImplTest extends BaseLockTest {
         client = CuratorFrameworkFactory.newClient(server.getConnectString(), timing.session(), timing.connection(), retryPolicy);
         client.start();
 
-        lock = new ZookeeperLockImpl("/test-lock", client);
+        lock = new ZkLockImpl("/test-lock", client);
     }
 
     @Test
@@ -219,6 +220,6 @@ public class ZookeeperLockImplTest extends BaseLockTest {
 
     @AfterEach
     void after() throws IOException {
-        client.close();
+        CloseableUtils.closeQuietly(client);
     }
 }
