@@ -1,6 +1,6 @@
 package cn.zcn.distributed.lock.redis.subscription;
 
-import cn.zcn.distributed.lock.LongEncoder;
+import cn.zcn.distributed.lock.redis.LongEncoder;
 
 public interface RedisSubscriptionListener {
 

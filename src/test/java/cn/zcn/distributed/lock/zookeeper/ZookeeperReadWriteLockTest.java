@@ -17,10 +17,10 @@ import java.util.concurrent.*;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-public class ZkReadWriteLockImplTest extends BaseLockTest {
+public class ZookeeperReadWriteLockTest extends BaseZookeeperTest {
 
-    private ZkLock readLock;
-    private ZkLock writeLock;
+    private ZookeeperLock readLock;
+    private ZookeeperLock writeLock;
     private CuratorFramework client;
 
     @BeforeEach
@@ -31,7 +31,7 @@ public class ZkReadWriteLockImplTest extends BaseLockTest {
         client = CuratorFrameworkFactory.newClient(server.getConnectString(), timing.session(), timing.connection(), retryPolicy);
         client.start();
 
-        ZkReadWriteLock lock = new ZkReadWriteLockImpl("/test-lock", client);
+        ZookeeperReadWriteLock lock = new ZookeeperReadWriteLock("/test-lock", client);
         readLock = lock.readLock();
         writeLock = lock.writeLock();
     }

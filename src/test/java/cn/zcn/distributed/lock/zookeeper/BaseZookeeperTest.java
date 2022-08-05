@@ -5,9 +5,7 @@ import org.apache.curator.utils.CloseableUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
-import java.io.IOException;
-
-public class BaseLockTest {
+public class BaseZookeeperTest {
 
     protected TestingServer server;
 
@@ -19,7 +17,7 @@ public class BaseLockTest {
     }
 
     @AfterEach
-    void baseLockTest_after() throws IOException {
+    void baseLockTest_after() {
         CloseableUtils.closeQuietly(server);
     }
 }

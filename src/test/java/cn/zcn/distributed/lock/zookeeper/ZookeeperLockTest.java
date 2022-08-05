@@ -19,9 +19,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatException;
 
-public class ZkLockImplTest extends BaseLockTest {
+public class ZookeeperLockTest extends BaseZookeeperTest {
 
-    private ZkLock lock;
+    private ZookeeperLock lock;
     private CuratorFramework client;
 
     @BeforeEach
@@ -32,7 +32,7 @@ public class ZkLockImplTest extends BaseLockTest {
         client = CuratorFrameworkFactory.newClient(server.getConnectString(), timing.session(), timing.connection(), retryPolicy);
         client.start();
 
-        lock = new ZkLockImpl("/test-lock", client);
+        lock = new ZookeeperLock("/test-lock", client);
     }
 
     @Test

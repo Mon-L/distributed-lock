@@ -1,4 +1,4 @@
-package cn.zcn.distributed.lock;
+package cn.zcn.distributed.lock.redis;
 
 import java.nio.ByteBuffer;
 

@@ -15,15 +15,15 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-class ZkLockImpl implements ZkLock {
+public class ZookeeperLock {
 
     protected static class AcquireLockResult {
-        private final boolean isLock;
-        private final String watchedNodeName;
+        private final boolean success;
+        private final String pathToWatch;
 
-        protected AcquireLockResult(boolean isLock, String watchedNodeName) {
-            this.isLock = isLock;
-            this.watchedNodeName = watchedNodeName;
+        protected AcquireLockResult(boolean success, String pathToWatch) {
+            this.success = success;
+            this.pathToWatch = pathToWatch;
         }
     }
 
@@ -46,15 +46,15 @@ class ZkLockImpl implements ZkLock {
     private final Watcher watcher = new Watcher() {
         @Override
         public void process(WatchedEvent event) {
-            client.postSafeNotify(ZkLockImpl.this);
+            client.postSafeNotify(ZookeeperLock.this);
         }
     };
 
-    protected ZkLockImpl(String path, CuratorFramework client) {
+    public ZookeeperLock(String path, CuratorFramework client) {
         this(path, LOCK_NAME, client);
     }
 
-    protected ZkLockImpl(String path, String lockName, CuratorFramework client) {
+    protected ZookeeperLock(String path, String lockName, CuratorFramework client) {
         PathUtils.validatePath(path);
 
         this.client = client;
@@ -62,12 +62,12 @@ class ZkLockImpl implements ZkLock {
         this.lockPath = ZKPaths.makePath(containerPath, lockName);
     }
 
-    @Override
     public void lock() throws Exception {
-        doLock(-1, null);
+        if (!doLock(-1, null)) {
+            throw new Exception("Connection error.");
+        }
     }
 
-    @Override
     public boolean tryLock(long waitTime, TimeUnit waitTimeUnit) throws Exception {
         return doLock(waitTime, waitTimeUnit);
     }
@@ -94,7 +94,11 @@ class ZkLockImpl implements ZkLock {
 
     private String acquireLock(long waitTime, TimeUnit waitTimeUnit) throws Exception {
         long startTime = System.currentTimeMillis();
-        Long timeToWait = (waitTimeUnit == null) ? null : waitTimeUnit.toMillis(waitTime);
+        boolean limitedWait = waitTimeUnit != null;
+
+        if (limitedWait) {
+            waitTime = waitTimeUnit.toMillis(waitTime);
+        }
 
         boolean locked = false;
         boolean doClean = false;
@@ -105,18 +109,17 @@ class ZkLockImpl implements ZkLock {
             try {
                 AcquireLockResult ret = isAcquired(nodePath);
 
-                if (ret.isLock) {
+                if (ret.success) {
                     locked = true;
                 } else {
-                    String prevNodePath = ZKPaths.makePath(containerPath, ret.watchedNodeName);
+                    String prevNodePath = ZKPaths.makePath(containerPath, ret.pathToWatch);
 
                     synchronized (this) {
                         try {
                             client.getData().usingWatcher(watcher).forPath(prevNodePath);
 
-                            if (timeToWait != null) {
-                                timeToWait -= (System.currentTimeMillis() - startTime);
-                                startTime = System.currentTimeMillis();
+                            if (limitedWait) {
+                                long timeToWait = getTimeToWait(startTime, waitTime);
 
                                 if (timeToWait <= 0) {
                                     doClean = true;
@@ -151,7 +154,11 @@ class ZkLockImpl implements ZkLock {
         return locked ? nodePath : null;
     }
 
-    @Override
+    private long getTimeToWait(long startTime, long timeToWait) {
+        long elapsedTime = System.currentTimeMillis() - startTime;
+        return timeToWait - elapsedTime;
+    }
+
     public void unlock() throws Exception {
         Thread thread = Thread.currentThread();
         LockHolder lockHolder = locks.get(thread);
@@ -205,7 +212,6 @@ class ZkLockImpl implements ZkLock {
         return name;
     }
 
-    @Override
     public boolean heldByCurrentThread() {
         LockHolder lockHolder = locks.get(Thread.currentThread());
         return lockHolder != null && lockHolder.count.get() > 0;

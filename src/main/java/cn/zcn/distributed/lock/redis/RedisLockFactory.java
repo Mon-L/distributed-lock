@@ -18,8 +18,8 @@ public class RedisLockFactory {
 
     public RedisLockFactory(RedisCommandFactory redisCommandFactory) {
         this.clientId = ClientId.create();
-        this.timer = new HashedWheelTimer(10, TimeUnit.MILLISECONDS);
         this.redisCommandFactory = redisCommandFactory;
+        this.timer = new HashedWheelTimer(10, TimeUnit.MILLISECONDS);
         this.redisSubscriptionService = new RedisSubscriptionService(timer, redisCommandFactory);
         this.lockSubscription = new LockSubscription(redisSubscriptionService);
     }
@@ -31,12 +31,22 @@ public class RedisLockFactory {
         }
     }
 
-    public RedisLock getLock(String name) {
+    public RedisLock getLock(String name) throws IllegalStateException {
+        checkRunning();
+
         return new RedisLockImpl(name, clientId, timer, lockSubscription, redisCommandFactory);
     }
 
-    public RedisLock getFairLock(String name) {
+    public RedisLock getFairLock(String name) throws IllegalStateException {
+        checkRunning();
+
         return new RedisFairLockImpl(name, clientId, timer, lockSubscription, redisCommandFactory);
+    }
+
+    private void checkRunning() throws IllegalStateException {
+        if (!running) {
+            throw new IllegalStateException("RedisLockFactory is not running");
+        }
     }
 
     public void shutdown() {

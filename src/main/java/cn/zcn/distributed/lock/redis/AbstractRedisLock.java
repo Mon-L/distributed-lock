@@ -1,6 +1,5 @@
 package cn.zcn.distributed.lock.redis;
 
-import cn.zcn.distributed.lock.LockException;
 import cn.zcn.distributed.lock.redis.subscription.LockSubscription;
 import cn.zcn.distributed.lock.redis.subscription.LockSubscriptionHolder;
 import io.netty.util.Timeout;
@@ -65,6 +64,10 @@ public abstract class AbstractRedisLock implements RedisLock {
      * @param timer    定时器
      */
     public AbstractRedisLock(String lock, ClientId clientId, Timer timer, LockSubscription lockSubscription) {
+        if (lock == null || lock.trim().isEmpty()) {
+            throw new IllegalArgumentException("Lock name should not be null and empty");
+        }
+
         this.lockRawName = lock;
         this.lockEntryName = withLockPrefix(lock);
         this.clientId = clientId;
