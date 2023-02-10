@@ -4,7 +4,7 @@ import cn.zcn.distributed.lock.redis.subscription.RedisSubscription;
 
 import java.util.List;
 
-public interface RedisCommandFactory {
+public interface RedisExecutor {
 
     /**
      * 执行 redis lua 脚本
@@ -21,8 +21,13 @@ public interface RedisCommandFactory {
      *
      * @return {@link RedisSubscription}
      */
-    RedisSubscription getSubscription();
+    RedisSubscription createSubscription();
 
+    /**
+     * 是否阻塞型的 Redis client
+     *
+     * @return {@code true},是阻塞型;{@code false},不是阻塞型;
+     */
     boolean isBlocked();
 
     void stop();

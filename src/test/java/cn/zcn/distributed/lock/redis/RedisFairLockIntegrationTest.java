@@ -19,7 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 public class RedisFairLockIntegrationTest {
 
-    private RedisFairLockImpl redisLock;
+    private RedisFairLock redisLock;
 
     static Stream<Arguments> testParams() {
         return Stream.of(
@@ -34,14 +34,14 @@ public class RedisFairLockIntegrationTest {
         );
     }
 
-    private void initLock(RedisCommandFactory commandFactory, RedisSubscriptionService subscriptionService) {
-        redisLock = new RedisFairLockImpl(UUID.randomUUID().toString(), ClientId.create(), RedisIntegrationTestContainer.getTimer(), new LockSubscription(subscriptionService), commandFactory);
+    private void initLock(RedisExecutor redisExecutor, RedisSubscriptionService subscriptionService) {
+        redisLock = new RedisFairLock(UUID.randomUUID().toString(), ClientId.create(), RedisIntegrationTestContainer.getTimer(), new LockSubscription(subscriptionService), redisExecutor);
     }
 
     @ParameterizedTest
     @MethodSource("testParams")
-    void testLock(RedisCommandFactory commandFactory, RedisSubscriptionService subscriptionService) throws InterruptedException {
-        initLock(commandFactory, subscriptionService);
+    void testLock(RedisExecutor redisExecutor, RedisSubscriptionService subscriptionService) throws InterruptedException {
+        initLock(redisExecutor, subscriptionService);
 
         long startTime = System.currentTimeMillis();
         redisLock.lock(3, TimeUnit.SECONDS);
@@ -51,8 +51,8 @@ public class RedisFairLockIntegrationTest {
 
     @ParameterizedTest
     @MethodSource("testParams")
-    void testUnLock(RedisCommandFactory commandFactory, RedisSubscriptionService subscriptionService) throws InterruptedException {
-        initLock(commandFactory, subscriptionService);
+    void testUnLock(RedisExecutor redisExecutor, RedisSubscriptionService subscriptionService) throws InterruptedException {
+        initLock(redisExecutor, subscriptionService);
 
         redisLock.lock(10, TimeUnit.SECONDS);
         assertThat(redisLock.isHeldByCurrentThread()).isTrue();
@@ -63,8 +63,8 @@ public class RedisFairLockIntegrationTest {
 
     @ParameterizedTest
     @MethodSource("testParams")
-    void testUnLockByAnotherThread(RedisCommandFactory commandFactory, RedisSubscriptionService subscriptionService) throws InterruptedException {
-        initLock(commandFactory, subscriptionService);
+    void testUnLockByAnotherThread(RedisExecutor redisExecutor, RedisSubscriptionService subscriptionService) throws InterruptedException {
+        initLock(redisExecutor, subscriptionService);
         Semaphore semaphore = new Semaphore(0);
 
         redisLock.lock(10, TimeUnit.SECONDS);
@@ -81,8 +81,8 @@ public class RedisFairLockIntegrationTest {
 
     @ParameterizedTest
     @MethodSource("testParams")
-    void testHeldByCurrentThread(RedisCommandFactory commandFactory, RedisSubscriptionService subscriptionService) throws InterruptedException {
-        initLock(commandFactory, subscriptionService);
+    void testHeldByCurrentThread(RedisExecutor redisExecutor, RedisSubscriptionService subscriptionService) throws InterruptedException {
+        initLock(redisExecutor, subscriptionService);
 
         assertThat(redisLock.isHeldByCurrentThread()).isFalse();
 
@@ -95,8 +95,8 @@ public class RedisFairLockIntegrationTest {
 
     @ParameterizedTest
     @MethodSource("testParams")
-    void testConcurrentLock(RedisCommandFactory commandFactory, RedisSubscriptionService subscriptionService) throws InterruptedException {
-        initLock(commandFactory, subscriptionService);
+    void testConcurrentLock(RedisExecutor redisExecutor, RedisSubscriptionService subscriptionService) throws InterruptedException {
+        initLock(redisExecutor, subscriptionService);
 
         UnsafeCounter counter = new UnsafeCounter();
 
@@ -122,8 +122,8 @@ public class RedisFairLockIntegrationTest {
 
     @ParameterizedTest
     @MethodSource("testParams")
-    void testTryLockWait(RedisCommandFactory commandFactory, RedisSubscriptionService subscriptionService) throws InterruptedException {
-        initLock(commandFactory, subscriptionService);
+    void testTryLockWait(RedisExecutor redisExecutor, RedisSubscriptionService subscriptionService) throws InterruptedException {
+        initLock(redisExecutor, subscriptionService);
 
         Semaphore semaphore = new Semaphore(0);
 
@@ -152,8 +152,8 @@ public class RedisFairLockIntegrationTest {
 
     @ParameterizedTest
     @MethodSource("testLettuceParams")
-    void testFariLockOrdering(RedisCommandFactory commandFactory, RedisSubscriptionService subscriptionService) throws InterruptedException {
-        initLock(commandFactory, subscriptionService);
+    void testFariLockOrdering(RedisExecutor redisExecutor, RedisSubscriptionService subscriptionService) throws InterruptedException {
+        initLock(redisExecutor, subscriptionService);
 
         final ConcurrentLinkedQueue<Thread> queue = new ConcurrentLinkedQueue<>();
         final AtomicInteger lockedCounter = new AtomicInteger();

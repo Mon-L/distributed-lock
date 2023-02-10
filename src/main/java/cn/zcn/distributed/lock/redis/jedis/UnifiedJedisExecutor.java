@@ -1,16 +1,16 @@
 package cn.zcn.distributed.lock.redis.jedis;
 
-import cn.zcn.distributed.lock.redis.RedisCommandFactory;
+import cn.zcn.distributed.lock.redis.RedisExecutor;
 import cn.zcn.distributed.lock.redis.subscription.RedisSubscription;
 import redis.clients.jedis.UnifiedJedis;
 
 import java.util.List;
 
-public class UnifiedJedisCommandFactory implements RedisCommandFactory {
+public class UnifiedJedisExecutor implements RedisExecutor {
 
     private final UnifiedJedis unifiedJedis;
 
-    public UnifiedJedisCommandFactory(UnifiedJedis unifiedJedis) {
+    public UnifiedJedisExecutor(UnifiedJedis unifiedJedis) {
         this.unifiedJedis = unifiedJedis;
     }
 
@@ -20,7 +20,7 @@ public class UnifiedJedisCommandFactory implements RedisCommandFactory {
     }
 
     @Override
-    public RedisSubscription getSubscription() {
+    public RedisSubscription createSubscription() {
         return new UnifiedJedisSubscription(unifiedJedis);
     }
 

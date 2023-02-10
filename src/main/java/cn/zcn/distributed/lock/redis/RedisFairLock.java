@@ -36,13 +36,13 @@ import java.util.concurrent.CompletableFuture;
  * ]
  * </pre>
  */
-public class RedisFairLockImpl extends RedisLockImpl {
+public class RedisFairLock extends RedisUnfairLock {
 
     private final String queenName;
     private final String timeoutSetName;
 
-    public RedisFairLockImpl(String lock, ClientId clientId, Timer timer, LockSubscription lockSubscription, RedisCommandFactory commandFactory) {
-        super(lock, clientId, timer, lockSubscription, commandFactory);
+    public RedisFairLock(String lock, ClientId clientId, Timer timer, LockSubscription lockSubscription, RedisExecutor redisExecutor) {
+        super(lock, clientId, timer, lockSubscription, redisExecutor);
         queenName = withLockPrefix(lock + ":queen");
         timeoutSetName = withLockPrefix(lock + ":timeout");
     }

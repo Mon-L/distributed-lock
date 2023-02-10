@@ -1,22 +1,22 @@
 package cn.zcn.distributed.lock.redis.lettuce;
 
-import cn.zcn.distributed.lock.redis.RedisCommandFactory;
+import cn.zcn.distributed.lock.redis.RedisExecutor;
 import cn.zcn.distributed.lock.redis.subscription.RedisSubscription;
+import io.lettuce.core.RedisClient;
 import io.lettuce.core.ScriptOutputType;
-import io.lettuce.core.cluster.RedisClusterClient;
-import io.lettuce.core.cluster.api.StatefulRedisClusterConnection;
-import io.lettuce.core.cluster.api.sync.RedisAdvancedClusterCommands;
+import io.lettuce.core.api.StatefulRedisConnection;
+import io.lettuce.core.api.sync.RedisCommands;
 import io.lettuce.core.codec.ByteArrayCodec;
 
 import java.util.List;
 
-public class LettuceClusterCommandFactory implements RedisCommandFactory {
+public class LettuceExecutor implements RedisExecutor {
 
-    private final RedisClusterClient redisClient;
-    private final StatefulRedisClusterConnection<byte[], byte[]> conn;
-    private final RedisAdvancedClusterCommands<byte[], byte[]> commands;
+    private final RedisClient redisClient;
+    private final StatefulRedisConnection<byte[], byte[]> conn;
+    private final RedisCommands<byte[], byte[]> commands;
 
-    public LettuceClusterCommandFactory(RedisClusterClient redisClient) {
+    public LettuceExecutor(RedisClient redisClient) {
         this.redisClient = redisClient;
         this.conn = redisClient.connect(ByteArrayCodec.INSTANCE);
         this.commands = this.conn.sync();
@@ -28,7 +28,7 @@ public class LettuceClusterCommandFactory implements RedisCommandFactory {
     }
 
     @Override
-    public RedisSubscription getSubscription() {
+    public RedisSubscription createSubscription() {
         return new LettuceSubscription(redisClient.connectPubSub(ByteArrayCodec.INSTANCE));
     }
 

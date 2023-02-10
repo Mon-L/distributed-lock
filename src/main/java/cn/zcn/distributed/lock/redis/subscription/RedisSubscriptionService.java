@@ -1,6 +1,6 @@
 package cn.zcn.distributed.lock.redis.subscription;
 
-import cn.zcn.distributed.lock.redis.RedisCommandFactory;
+import cn.zcn.distributed.lock.redis.RedisExecutor;
 import io.netty.util.Timeout;
 import io.netty.util.Timer;
 
@@ -37,14 +37,14 @@ public class RedisSubscriptionService implements LockSubscriptionService {
     private volatile int state = NOT_LISTEN;
 
     private final Timer timer;
-    private final RedisCommandFactory commandFactory;
+    private final RedisExecutor redisExecutor;
     private final Map<ByteArrayHolder, LockStatusListener> channelListeners = new ConcurrentHashMap<>();
 
     private BlockingSubscriber subscriber;
 
-    public RedisSubscriptionService(Timer timer, RedisCommandFactory commandFactory) {
+    public RedisSubscriptionService(Timer timer, RedisExecutor redisExecutor) {
         this.timer = timer;
-        this.commandFactory = commandFactory;
+        this.redisExecutor = redisExecutor;
     }
 
     @Override
@@ -52,10 +52,10 @@ public class RedisSubscriptionService implements LockSubscriptionService {
         if (running.compareAndSet(false, true)) {
             DispatchLockStatusListener lockMessageListener = new DispatchLockStatusListener(channelListeners);
 
-            if (commandFactory.isBlocked()) {
-                subscriber = new BlockingSubscriber(commandFactory, lockMessageListener);
+            if (redisExecutor.isBlocked()) {
+                subscriber = new BlockingSubscriber(redisExecutor, lockMessageListener);
             } else {
-                subscriber = new Subscriber(commandFactory, lockMessageListener);
+                subscriber = new Subscriber(redisExecutor, lockMessageListener);
             }
         }
     }
@@ -196,20 +196,20 @@ public class RedisSubscriptionService implements LockSubscriptionService {
 
     private class Subscriber extends BlockingSubscriber {
 
-        private Subscriber(RedisCommandFactory commandFactory, LockStatusListener messageListener) {
-            super(commandFactory, messageListener);
+        private Subscriber(RedisExecutor redisExecutor, LockStatusListener messageListener) {
+            super(redisExecutor, messageListener);
         }
 
         @Override
         protected void doSubscribe(RedisSubscriptionListener listener, byte[]... channel) {
-            redisSubscription = commandFactory.getSubscription();
+            redisSubscription = redisExecutor.createSubscription();
             redisSubscription.subscribe(listener, channel);
         }
     }
 
     private class BlockingSubscriber implements RedisSubscriptionListener {
 
-        private final RedisCommandFactory commandFactory;
+        private final RedisExecutor redisExecutor;
         private final LockStatusListener messageListener;
         private final ExecutorService executor = Executors.newSingleThreadExecutor();
         private final Map<ByteArrayHolder, CompletableFuture<Void>> subscriptionPromises = new ConcurrentHashMap<>();
@@ -218,8 +218,8 @@ public class RedisSubscriptionService implements LockSubscriptionService {
         private volatile CompletableFuture<Void> initPromise;
         protected volatile RedisSubscription redisSubscription;
 
-        private BlockingSubscriber(RedisCommandFactory commandFactory, LockStatusListener messageListener) {
-            this.commandFactory = commandFactory;
+        private BlockingSubscriber(RedisExecutor redisExecutor, LockStatusListener messageListener) {
+            this.redisExecutor = redisExecutor;
             this.messageListener = messageListener;
         }
 
@@ -316,7 +316,7 @@ public class RedisSubscriptionService implements LockSubscriptionService {
                 }
 
                 try {
-                    redisSubscription = commandFactory.getSubscription();
+                    redisSubscription = redisExecutor.createSubscription();
                     redisSubscription.subscribe(listener, channel);
                     state = NOT_LISTEN;
                 } catch (Exception e) {

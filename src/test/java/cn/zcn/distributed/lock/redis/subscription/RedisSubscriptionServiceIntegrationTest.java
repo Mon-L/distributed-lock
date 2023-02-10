@@ -1,6 +1,6 @@
 package cn.zcn.distributed.lock.redis.subscription;
 
-import cn.zcn.distributed.lock.redis.RedisCommandFactory;
+import cn.zcn.distributed.lock.redis.RedisExecutor;
 import cn.zcn.distributed.lock.test.redis.RedisIntegrationTestContainer;
 import io.netty.util.Timer;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,8 +35,8 @@ public class RedisSubscriptionServiceIntegrationTest {
 
     @ParameterizedTest
     @MethodSource("testParams")
-    void testSubscribe(RedisCommandFactory commandFactory) {
-        RedisSubscriptionService subscriptionService = new RedisSubscriptionService(timer, commandFactory);
+    void testSubscribe(RedisExecutor redisExecutor) {
+        RedisSubscriptionService subscriptionService = new RedisSubscriptionService(timer, redisExecutor);
         subscriptionService.start();
 
         CompletableFuture<Void> promise = subscriptionService.subscribe(lock, listener);
@@ -53,8 +53,8 @@ public class RedisSubscriptionServiceIntegrationTest {
 
     @ParameterizedTest
     @MethodSource("testParams")
-    void testUnsubscribe(RedisCommandFactory commandFactory) {
-        RedisSubscriptionService subscriptionService = new RedisSubscriptionService(timer, commandFactory);
+    void testUnsubscribe(RedisExecutor redisExecutor) {
+        RedisSubscriptionService subscriptionService = new RedisSubscriptionService(timer, redisExecutor);
         subscriptionService.start();
 
         CompletableFuture<Void> promise;
@@ -72,8 +72,8 @@ public class RedisSubscriptionServiceIntegrationTest {
 
     @ParameterizedTest
     @MethodSource("testParams")
-    void testStop(RedisCommandFactory commandFactory) throws InterruptedException {
-        RedisSubscriptionService subscriptionService = new RedisSubscriptionService(timer, commandFactory);
+    void testStop(RedisExecutor redisExecutor) throws InterruptedException {
+        RedisSubscriptionService subscriptionService = new RedisSubscriptionService(timer, redisExecutor);
         subscriptionService.start();
 
         CompletableFuture<Void> subscribePromise = subscriptionService.subscribe(lock, listener);

@@ -1,17 +1,17 @@
 package cn.zcn.distributed.lock.redis.jedis;
 
-import cn.zcn.distributed.lock.redis.RedisCommandFactory;
+import cn.zcn.distributed.lock.redis.RedisExecutor;
 import cn.zcn.distributed.lock.redis.subscription.RedisSubscription;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.util.Pool;
 
 import java.util.List;
 
-public class JedisPoolCommandFactory implements RedisCommandFactory {
+public class JedisPoolExecutor implements RedisExecutor {
 
     private final Pool<Jedis> jedisPool;
 
-    public JedisPoolCommandFactory(Pool<Jedis> jedisPool) {
+    public JedisPoolExecutor(Pool<Jedis> jedisPool) {
         this.jedisPool = jedisPool;
     }
 
@@ -23,7 +23,7 @@ public class JedisPoolCommandFactory implements RedisCommandFactory {
     }
 
     @Override
-    public RedisSubscription getSubscription() {
+    public RedisSubscription createSubscription() {
         Jedis jedis = jedisPool.getResource();
         return new JedisSubscription(jedis);
     }

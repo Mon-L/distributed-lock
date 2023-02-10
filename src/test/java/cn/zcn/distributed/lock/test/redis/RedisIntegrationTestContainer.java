@@ -1,8 +1,8 @@
 package cn.zcn.distributed.lock.test.redis;
 
-import cn.zcn.distributed.lock.redis.RedisCommandFactory;
-import cn.zcn.distributed.lock.redis.jedis.JedisPoolCommandFactory;
-import cn.zcn.distributed.lock.redis.lettuce.LettuceCommandFactory;
+import cn.zcn.distributed.lock.redis.RedisExecutor;
+import cn.zcn.distributed.lock.redis.jedis.JedisPoolExecutor;
+import cn.zcn.distributed.lock.redis.lettuce.LettuceExecutor;
 import cn.zcn.distributed.lock.redis.subscription.RedisSubscriptionService;
 import io.lettuce.core.RedisClient;
 import io.lettuce.core.RedisURI;
@@ -25,9 +25,9 @@ public class RedisIntegrationTestContainer {
         return timer;
     });
 
-    private static final NewableLazy<RedisCommandFactory> jedisPoolCommandFactory = NewableLazy.of(new Supplier<RedisCommandFactory>() {
+    private static final NewableLazy<RedisExecutor> jedisPoolCommandFactory = NewableLazy.of(new Supplier<RedisExecutor>() {
         @Override
-        public RedisCommandFactory get() {
+        public RedisExecutor get() {
             JedisPool jedisPool;
             if (redisIntegrationTestConfig.getPassword() == null) {
                 jedisPool = new JedisPool(redisIntegrationTestConfig.getHost(), redisIntegrationTestConfig.getPort());
@@ -35,15 +35,15 @@ public class RedisIntegrationTestContainer {
                 jedisPool = new JedisPool(redisIntegrationTestConfig.getHost(), redisIntegrationTestConfig.getPort(), null, redisIntegrationTestConfig.getPassword());
             }
 
-            RedisCommandFactory commandFactory = new JedisPoolCommandFactory(jedisPool);
-            ShutdownQueue.register(commandFactory::stop);
-            return commandFactory;
+            RedisExecutor redisExecutor = new JedisPoolExecutor(jedisPool);
+            ShutdownQueue.register(redisExecutor::stop);
+            return redisExecutor;
         }
     });
 
-    private static final NewableLazy<RedisCommandFactory> lettuceCommandFactory = NewableLazy.of(new Supplier<RedisCommandFactory>() {
+    private static final NewableLazy<RedisExecutor> lettuceCommandFactory = NewableLazy.of(new Supplier<RedisExecutor>() {
         @Override
-        public RedisCommandFactory get() {
+        public RedisExecutor get() {
             RedisURI.Builder builder = RedisURI.Builder
                     .redis(redisIntegrationTestConfig.getHost(), redisIntegrationTestConfig.getPort())
                     .withTimeout(Duration.ofSeconds(10));
@@ -55,9 +55,9 @@ public class RedisIntegrationTestContainer {
             RedisURI redisURI = builder.build();
             RedisClient redisClient = RedisClient.create(redisURI);
 
-            RedisCommandFactory commandFactory = new LettuceCommandFactory(redisClient);
-            ShutdownQueue.register(commandFactory::stop);
-            return commandFactory;
+            RedisExecutor redisExecutor = new LettuceExecutor(redisClient);
+            ShutdownQueue.register(redisExecutor::stop);
+            return redisExecutor;
         }
     });
 
@@ -100,11 +100,11 @@ public class RedisIntegrationTestContainer {
         return timer.get();
     }
 
-    public static RedisCommandFactory getJedisPoolCommandFactory() {
+    public static RedisExecutor getJedisPoolCommandFactory() {
         return jedisPoolCommandFactory.get();
     }
 
-    public static RedisCommandFactory getLettuceCommandFactory() {
+    public static RedisExecutor getLettuceCommandFactory() {
         return lettuceCommandFactory.get();
     }
 

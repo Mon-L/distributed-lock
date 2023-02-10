@@ -13,14 +13,14 @@ public class RedisLockFactory {
     private final Timer timer;
     private final ClientId clientId;
     private final LockSubscription lockSubscription;
-    private final RedisCommandFactory redisCommandFactory;
+    private final RedisExecutor redisExecutor;
     private final RedisSubscriptionService redisSubscriptionService;
 
-    public RedisLockFactory(RedisCommandFactory redisCommandFactory) {
+    public RedisLockFactory(RedisExecutor redisExecutor) {
         this.clientId = ClientId.create();
-        this.redisCommandFactory = redisCommandFactory;
+        this.redisExecutor = redisExecutor;
         this.timer = new HashedWheelTimer(10, TimeUnit.MILLISECONDS);
-        this.redisSubscriptionService = new RedisSubscriptionService(timer, redisCommandFactory);
+        this.redisSubscriptionService = new RedisSubscriptionService(timer, redisExecutor);
         this.lockSubscription = new LockSubscription(redisSubscriptionService);
     }
 
@@ -31,30 +31,30 @@ public class RedisLockFactory {
         }
     }
 
-    public RedisLock getLock(String name) throws IllegalStateException {
-        checkRunning();
+    public RedisLock getUnfairLock(String name) throws IllegalStateException {
+        checkState();
 
-        return new RedisLockImpl(name, clientId, timer, lockSubscription, redisCommandFactory);
+        return new RedisUnfairLock(name, clientId, timer, lockSubscription, redisExecutor);
     }
 
     public RedisLock getFairLock(String name) throws IllegalStateException {
-        checkRunning();
+        checkState();
 
-        return new RedisFairLockImpl(name, clientId, timer, lockSubscription, redisCommandFactory);
+        return new RedisFairLock(name, clientId, timer, lockSubscription, redisExecutor);
     }
 
-    private void checkRunning() throws IllegalStateException {
+    private void checkState() throws IllegalStateException {
         if (!running) {
-            throw new IllegalStateException("RedisLockFactory is not running");
+            throw new IllegalStateException("RedisLockFactory is not running.");
         }
     }
 
     public void shutdown() {
         if (running) {
-            running = false;
             timer.stop();
             redisSubscriptionService.stop();
-            redisCommandFactory.stop();
+            redisExecutor.stop();
+            running = false;
         }
     }
 }

@@ -1,6 +1,6 @@
 package cn.zcn.distributed.lock.redis.jedis;
 
-import cn.zcn.distributed.lock.redis.RedisCommandFactory;
+import cn.zcn.distributed.lock.redis.RedisExecutor;
 import cn.zcn.distributed.lock.redis.subscription.RedisSubscription;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -15,12 +15,12 @@ import static org.mockito.Mockito.*;
 public class UnifiedJedisCommandFactoryTest {
 
     private UnifiedJedis unifiedJedis;
-    private RedisCommandFactory commandFactory;
+    private RedisExecutor redisExecutor;
 
     @BeforeEach
     void beforeEach() {
         unifiedJedis = mock(UnifiedJedis.class);
-        commandFactory = spy(new UnifiedJedisCommandFactory(unifiedJedis));
+        redisExecutor = spy(new UnifiedJedisExecutor(unifiedJedis));
     }
 
     @Test
@@ -29,20 +29,20 @@ public class UnifiedJedisCommandFactoryTest {
         List<byte[]> keys = Collections.emptyList();
         List<byte[]> args = Collections.emptyList();
 
-        commandFactory.eval(script, keys, args);
+        redisExecutor.eval(script, keys, args);
 
         verify(unifiedJedis, times(1)).eval(script, keys, args);
     }
 
     @Test
     public void testGetSubscription() {
-        RedisSubscription redisSubscription = commandFactory.getSubscription();
+        RedisSubscription redisSubscription = redisExecutor.createSubscription();
         assertThat(redisSubscription).isNotNull();
     }
 
     @Test
     public void testStop() {
-        commandFactory.stop();
+        redisExecutor.stop();
         verify(unifiedJedis, times(1)).close();
     }
 }

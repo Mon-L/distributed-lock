@@ -19,13 +19,13 @@ import java.util.List;
  * }
  * </pre>
  */
-class RedisLockImpl extends AbstractRedisLock {
+class RedisUnfairLock extends AbstractRedisLock {
 
-    private final RedisCommandFactory commandFactory;
+    private final RedisExecutor redisExecutor;
 
-    public RedisLockImpl(String lock, ClientId clientId, Timer timer, LockSubscription lockSubscription, RedisCommandFactory commandFactory) {
+    public RedisUnfairLock(String lock, ClientId clientId, Timer timer, LockSubscription lockSubscription, RedisExecutor redisExecutor) {
         super(lock, clientId, timer, lockSubscription);
-        this.commandFactory = commandFactory;
+        this.redisExecutor = redisExecutor;
     }
 
     @Override
@@ -104,6 +104,6 @@ class RedisLockImpl extends AbstractRedisLock {
     }
 
     protected Long eval(String script, List<byte[]> keys, byte[]... args) {
-        return (Long) commandFactory.eval(script.getBytes(), keys, Arrays.asList(args));
+        return (Long) redisExecutor.eval(script.getBytes(), keys, Arrays.asList(args));
     }
 }
